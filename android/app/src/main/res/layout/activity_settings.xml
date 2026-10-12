@@ -1,0 +1,616 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/settingsRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000"
+    android:padding="24dp">
+
+    <!-- No header: the page title was redundant, and navigation back is the
+         system back gesture / button. -->
+
+    <!-- Scrollable content -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:id="@+id/settingsTile"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/tile_background_dark"
+            android:padding="24dp">
+
+            <!-- ══ Inverter status ══════════════════════════════════════════
+                 First thing on the page: this is what you open Settings to
+                 check when the car won't move. Read live over CAN — lasterr
+                 (the last fault that stopped the inverter) and status (a
+                 bitfield of current conditions). -->
+            <TextView
+                android:text="INVERTER STATUS"
+                android:textColor="#2D6B40"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="10dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:text="LAST FAULT"
+                android:textColor="#2D6B40"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/tvInvError"
+                android:text="—"
+                android:textColor="#DDEEDF"
+                android:textSize="26sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="14dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:text="CURRENT CONDITIONS"
+                android:textColor="#2D6B40"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/tvInvStatus"
+                android:text="—"
+                android:textColor="#DDEEDF"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/tvInvHint"
+                android:text=""
+                android:textColor="#888888"
+                android:textSize="12sp"
+                android:layout_marginTop="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:text="Faults are also written to ERRORS.CSV on the SD card with the odometer reading, so a fault that clears itself is still on record."
+                android:textColor="#888888"
+                android:textSize="12sp"
+                android:layout_marginTop="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#6AAA7A"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="20dp" />
+
+            <!-- Design Capacity -->
+            <TextView
+                android:text="BATTERY DESIGN CAPACITY"
+                android:textColor="#2D6B40"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="24dp">
+
+                <EditText
+                    android:id="@+id/etDesignCapacity"
+                    android:inputType="numberDecimal"
+                    android:textSize="28sp"
+                    android:textStyle="bold"
+                    android:textColor="#1A4A2A"
+                    android:background="@android:color/transparent"
+                    android:hint="0.0"
+                    android:textColorHint="#AAAAAA"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:text="kWh"
+                    android:textColor="#4A7A5A"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp" />
+
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#6AAA7A"
+                android:layout_marginBottom="20dp" />
+
+            <!-- SOH -->
+            <TextView
+                android:text="BATTERY STATE OF HEALTH (SOH)"
+                android:textColor="#2D6B40"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:text="Enter as a decimal — e.g. 0.99 for 99%"
+                android:textColor="#888888"
+                android:textSize="13sp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="24dp">
+
+                <EditText
+                    android:id="@+id/etSOH"
+                    android:inputType="numberDecimal"
+                    android:textSize="28sp"
+                    android:textStyle="bold"
+                    android:textColor="#1A4A2A"
+                    android:background="@android:color/transparent"
+                    android:hint="0.99"
+                    android:textColorHint="#AAAAAA"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:text="SOH"
+                    android:textColor="#4A7A5A"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp" />
+
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#6AAA7A"
+                android:layout_marginBottom="20dp" />
+
+            <!-- Voltage-based SOC calibration -->
+            <TextView
+                android:text="VOLTAGE-BASED SOC (OPTIONAL)"
+                android:textColor="#2D6B40"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:text="SOC is calculated from live pack voltage. Set your own 100% and 0% voltages here, or leave both blank to use the built-in defaults (340 V full, 270 V empty)."
+                android:textColor="#888888"
+                android:textSize="13sp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp" />
+
+            <TextView
+                android:text="VOLTAGE AT 100%"
+                android:textColor="#2D6B40"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="2dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="14dp">
+
+                <EditText
+                    android:id="@+id/etVoltFull"
+                    android:inputType="numberDecimal"
+                    android:textSize="28sp"
+                    android:textStyle="bold"
+                    android:textColor="#1A4A2A"
+                    android:background="@android:color/transparent"
+                    android:hint="default 340"
+                    android:textColorHint="#AAAAAA"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:text="V"
+                    android:textColor="#4A7A5A"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp" />
+
+            </LinearLayout>
+
+            <TextView
+                android:text="VOLTAGE AT 0%"
+                android:textColor="#2D6B40"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="2dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="6dp">
+
+                <EditText
+                    android:id="@+id/etVoltEmpty"
+                    android:inputType="numberDecimal"
+                    android:textSize="28sp"
+                    android:textStyle="bold"
+                    android:textColor="#1A4A2A"
+                    android:background="@android:color/transparent"
+                    android:hint="default 270"
+                    android:textColorHint="#AAAAAA"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:text="V"
+                    android:textColor="#4A7A5A"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp" />
+
+            </LinearLayout>
+
+            <TextView
+                android:text="Tip: voltage sags under load — the reading is smoothed, but expect the gauge to dip on hills and recover at rest."
+                android:textColor="#888888"
+                android:textSize="12sp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#6AAA7A"
+                android:layout_marginBottom="20dp" />
+
+            <!-- Usable capacity preview -->
+            <TextView
+                android:text="USABLE CAPACITY AT CURRENT SOH"
+                android:textColor="#2D6B40"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/tvUsableCapacity"
+                android:text="-- kWh"
+                android:textColor="#1A4A2A"
+                android:textSize="32sp"
+                android:textStyle="bold"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="28dp" />
+
+            <!-- Save -->
+            <TextView
+                android:id="@+id/btnSaveSettings"
+                android:text="SAVE SETTINGS"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:padding="14dp"
+                android:background="#1A4A2A"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#6AAA7A"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="20dp" />
+
+            <!-- ══ Firmware update (ESP32 over Bluetooth) ═════════════════════
+                 The interface lives sealed in the console, so new firmware is
+                 pushed over the same Bluetooth link. The file can come from
+                 anything the head unit can browse — USB stick, internal
+                 storage, SD card, Downloads. -->
+            <TextView
+                android:text="CAR FIRMWARE UPDATE"
+                android:textColor="#2D6B40"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp" />
+
+            <TextView
+                android:text="INSTALLED"
+                android:textColor="#2D6B40"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/tvFwVersion"
+                android:text="Checking…"
+                android:textColor="#DDEEDF"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="14dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/btnPickFirmware"
+                android:text="CHOOSE FIRMWARE FILE…"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:padding="14dp"
+                android:background="@drawable/tile_background_dark"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/btnPickFirmwareApp"
+                android:text="or open with a file manager app"
+                android:textColor="#6AAA7A"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:padding="8dp"
+                android:minHeight="48dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/tvFwFile"
+                android:text="No file selected. Use the .ino.bin from Sketch → Export Compiled Binary."
+                android:textColor="#888888"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="12dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/btnInstallFirmware"
+                android:text="INSTALL UPDATE"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:padding="14dp"
+                android:background="#1A4A2A"
+                android:alpha="0.4"
+                android:enabled="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <ProgressBar
+                android:id="@+id/pbFirmware"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:max="1000"
+                android:progress="0"
+                android:visibility="gone"
+                android:progressTint="#6AAA7A"
+                android:layout_marginTop="12dp"
+                android:layout_width="match_parent"
+                android:layout_height="10dp" />
+
+            <TextView
+                android:id="@+id/tvFwStatus"
+                android:text=""
+                android:textColor="#DDEEDF"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:layout_marginTop="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/btnCancelFirmware"
+                android:text="CANCEL"
+                android:textColor="#8B1A1A"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:padding="10dp"
+                android:visibility="gone"
+                android:layout_marginTop="6dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:text="Car must be stopped with the inverter off. Takes about 2 minutes — keep the ignition on and stay on this screen or the dashboard. If anything fails, the car keeps its current firmware."
+                android:textColor="#888888"
+                android:textSize="12sp"
+                android:layout_marginTop="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#6AAA7A"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="20dp" />
+
+            <!-- ══ Car interface diagnostics ═════════════════════════════════
+                 Read-only health report from the ESP32 (firmware v7.3+), since
+                 its USB console is sealed inside the console. -->
+            <TextView
+                android:text="CAR INTERFACE DIAGNOSTICS"
+                android:textColor="#2D6B40"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp" />
+
+            <TextView
+                android:id="@+id/tvDiag"
+                android:text="Tap CHECK to read the interface's health report."
+                android:textColor="#DDEEDF"
+                android:textSize="15sp"
+                android:lineSpacingExtra="4dp"
+                android:layout_marginBottom="12dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/btnRunDiag"
+                android:text="CHECK"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:padding="14dp"
+                android:minHeight="48dp"
+                android:background="@drawable/tile_background_dark"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:text="Shows why the interface last restarted, how fast CAN came up, bus health, where the fuel needle is reading from, and whether another module is also sending the gauge frames."
+                android:textColor="#888888"
+                android:textSize="12sp"
+                android:layout_marginTop="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#6AAA7A"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="20dp" />
+
+            <!-- ══ Start with the car ════════════════════════════════════════ -->
+            <TextView
+                android:text="START WITH THE CAR"
+                android:textColor="#2D6B40"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp" />
+
+            <TextView
+                android:id="@+id/btnAutoStart"
+                android:text="OPEN AUTOMATICALLY: ON"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:padding="14dp"
+                android:minHeight="48dp"
+                android:background="@drawable/tile_background_dark"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/tvOverlayState"
+                android:text=""
+                android:textColor="#888888"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/btnOverlayPermission"
+                android:text="ALLOW &quot;DISPLAY OVER OTHER APPS&quot;…"
+                android:textColor="#6AAA7A"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:padding="8dp"
+                android:minHeight="48dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#6AAA7A"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="20dp" />
+
+            <!-- Change device -->
+            <TextView
+                android:id="@+id/btnChangeDevice"
+                android:text="CHANGE BLUETOOTH DEVICE"
+                android:textColor="#8B1A1A"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:padding="14dp"
+                android:background="@drawable/tile_background_dark"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:text="Clears the saved device and returns to the device picker."
+                android:textColor="#888888"
+                android:textSize="12sp"
+                android:gravity="center"
+                android:layout_marginTop="6dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>

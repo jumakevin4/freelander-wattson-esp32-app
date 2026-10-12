@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Android Studio / Gradle (android/ has its own .gitignore too)
+android/.gradle/
+android/.idea/
+android/.kotlin/
+android/build/
+android/app/build/
+local.properties
+*.iml
+
+# Arduino IDE output (Sketch → Export Compiled Binary writes build/ next to
+# the sketch). Release builds go in esp32/releases/ on purpose.
+esp32/*/build/

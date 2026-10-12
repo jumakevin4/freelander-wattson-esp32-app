@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Land Rover EV — Rivian-style dashboard (ATOTO A6PF 1024×600)</title>
+<style>
+  .light{
+    --root:#DCE3DD; --tile:#EFF3EF; --tile-2:#E4EAE4; --inset:#E7ECE7;
+    --title:#243B2C; --label:#5C6F62; --value:#1A2C20; --tip:#6a7d70;
+    --orange:#F2A33C; --orange-soft:#f6c07a; --green:#4FB05A; --green-soft:#86cf8e;
+    --track:#D2DAD3; --line:#00000014; --seg:#dfe6e0; --seg-on:#ffffff;
+    --shadow:rgba(40,60,46,.10);
+  }
+  .dark{
+    --root:#0A120D; --tile:#14211A; --tile-2:#1a2b21; --inset:#101b14;
+    --title:#FFFFFF; --label:#9fb4a6; --value:#FFFFFF; --tip:#9fb4a6;
+    --orange:#F2A33C; --orange-soft:#a9803f; --green:#5BC169; --green-soft:#3c6b43;
+    --track:#2a3c31; --line:#ffffff14; --seg:#1c2c22; --seg-on:#31463a;
+    --shadow:rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;background:#000;overflow:hidden;}
+  body{display:flex;align-items:center;justify-content:center;
+    font-family:"Inter","SF Pro Display",-apple-system,system-ui,sans-serif;
+    font-feature-settings:"tnum" 1;letter-spacing:-0.01em;}
+  #stage{width:1024px;height:600px;flex:0 0 auto;transform-origin:center center;
+    background:var(--root);color:var(--value);padding:14px;display:flex;gap:12px;
+    transition:background .45s ease,color .45s ease;}
+  .panel{background:var(--tile);border-radius:20px;padding:18px 20px;display:flex;flex-direction:column;
+    position:relative;overflow:hidden;box-shadow:0 8px 26px var(--shadow);transition:background .45s ease;}
+  .p-range{flex:1;} .p-energy{flex:2.05;} .p-session{flex:1.05;}
+  .title{font-size:17px;font-weight:800;letter-spacing:.01em;color:var(--title);transition:color .45s;}
+  .title-row{display:flex;align-items:center;gap:10px;}
+  .title-row .spacer{flex:1;}
+  .info{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--label);color:var(--label);
+    font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-style:italic;font-weight:700;}
+  .iconbtn{color:var(--label);font-size:16px;cursor:pointer;opacity:.85;}
+
+  /* ── LEFT: projected range ── */
+  .car{margin:14px auto 6px;width:128px;height:74px;}
+  .car .body{fill:var(--green);}
+  .car .glass{fill:var(--orange);}
+  .car .wheel{fill:var(--title);}
+  .road{stroke:var(--label);stroke-width:3;stroke-linecap:round;opacity:.5;}
+  .range-km{font-size:46px;font-weight:800;color:var(--value);letter-spacing:-.03em;line-height:1;}
+  .range-sub{font-size:14px;color:var(--label);margin-top:4px;font-weight:600;}
+  .range-foot{margin-top:auto;display:flex;align-items:flex-end;gap:10px;}
+  .tip{flex:1;background:var(--inset);border-radius:14px;padding:10px 12px;}
+  .tip .l{font-size:11px;font-weight:800;color:var(--label);letter-spacing:.04em;}
+  .tip .t{font-size:11px;color:var(--tip);margin-top:3px;line-height:1.45;}
+  .swap{width:38px;height:38px;border-radius:50%;background:var(--inset);display:flex;align-items:center;
+    justify-content:center;color:var(--label);font-size:17px;cursor:pointer;flex:0 0 auto;}
+  @keyframes bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-3px);}}
+  @keyframes dash{to{stroke-dashoffset:-40;}}
+  .driving .car{animation:bob 1.6s ease-in-out infinite;}
+  .driving .road{stroke-dasharray:14 10;animation:dash 1s linear infinite;}
+
+  /* ── CENTER: energy use ── */
+  .seg{display:flex;background:var(--seg);border-radius:10px;padding:3px;gap:2px;}
+  .seg button{border:none;background:transparent;color:var(--label);font-size:12px;font-weight:700;
+    padding:5px 14px;border-radius:8px;cursor:pointer;transition:all .2s;}
+  .seg button.on{background:var(--seg-on);color:var(--value);box-shadow:0 1px 3px rgba(0,0,0,.12);}
+  .chart-area{flex:1;display:flex;gap:8px;min-height:0;margin-top:12px;}
+  .yaxis{display:flex;flex-direction:column;justify-content:space-between;font-size:10px;color:var(--label);
+    text-align:right;width:30px;padding:2px 0;font-weight:600;}
+  .chart{flex:1;position:relative;}
+  .gl{position:absolute;left:0;right:0;height:1px;background:var(--line);}
+  .zero{position:absolute;left:0;right:0;height:1.5px;background:var(--line);}
+  .bars{position:absolute;inset:0;display:flex;gap:3px;align-items:stretch;}
+  .bcol{flex:1;position:relative;}
+  .bar-up{position:absolute;left:10%;right:10%;background:var(--orange);border-radius:4px 4px 1px 1px;
+    transition:height .5s cubic-bezier(.22,.61,.36,1);}
+  .bar-dn{position:absolute;left:10%;right:10%;background:var(--green);border-radius:1px 1px 4px 4px;
+    transition:height .5s cubic-bezier(.22,.61,.36,1);}
+  .tooltip{position:absolute;background:#26302b;color:#fff;border-radius:10px;padding:7px 10px;font-size:11px;
+    pointer-events:none;transform:translate(-50%,-115%);white-space:nowrap;box-shadow:0 6px 16px rgba(0,0,0,.3);z-index:5;}
+  .tooltip b{font-size:13px;} .tooltip .g{color:var(--green-soft);} .tooltip .tm{color:#aebbb2;font-size:10px;}
+  .tooltip .dot{position:absolute;left:50%;bottom:-20px;width:9px;height:9px;border-radius:50%;border:2px solid #26302b;background:var(--tile);transform:translateX(-50%);}
+  .xaxis{display:flex;justify-content:space-between;font-size:10px;color:var(--label);margin:6px 0 0 38px;font-weight:600;}
+
+  /* gap + bottom stats */
+  .estats{display:flex;align-items:center;margin-top:18px;padding-top:16px;border-top:1px solid var(--line);}
+  .drivepill{display:flex;align-items:center;gap:6px;background:var(--inset);border-radius:10px;
+    padding:8px 12px;font-size:12px;font-weight:700;color:var(--label);margin-right:14px;cursor:pointer;}
+  .estat{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;}
+  .estat .v{font-size:24px;font-weight:800;color:var(--value);letter-spacing:-.02em;white-space:nowrap;}
+  .estat .v small{font-size:.45em;color:var(--label);font-weight:700;margin-left:2px;}
+  .estat .l{font-size:12px;font-weight:600;color:var(--label);}
+
+  /* ── RIGHT: session ── */
+  .sess-top{display:flex;align-items:center;gap:8px;margin-top:2px;}
+  .session-time{font-size:15px;font-weight:700;color:var(--label);}
+  .sess-top .spacer{flex:1;}
+  .ring-wrap{flex:1;display:flex;align-items:center;justify-content:center;margin:6px 0;min-height:0;position:relative;}
+  .ring-wrap svg{width:100%;height:100%;max-height:180px;}
+  .ring-num{font-weight:800;fill:var(--value);}
+  .ring-unit{font-weight:700;fill:var(--label);}
+  .ring-sub{font-weight:700;fill:var(--green);}
+  .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 8px;margin-top:6px;}
+  .scell{display:flex;flex-direction:column;}
+  .scell .l{font-size:11px;font-weight:700;color:var(--label);letter-spacing:.03em;}
+  .scell .v{font-size:18px;font-weight:800;color:var(--value);margin-top:1px;}
+  .reset{text-align:center;font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--label);
+    margin-top:10px;padding:5px;cursor:pointer;border-top:1px solid var(--line);}
+
+  .sim{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center;
+    background:rgba(20,30,24,.92);backdrop-filter:blur(8px);border:1px solid #2c4636;
+    padding:7px 12px;border-radius:999px;font-size:12px;z-index:20;color:#dfeee4;}
+  .sim button{background:#1c2c22;color:#dfeee4;border:1px solid #2c4636;border-radius:999px;
+    padding:6px 13px;font-weight:600;font-size:12px;cursor:pointer;transition:all .2s;}
+  .sim button:hover{border-color:#44BB66;color:#7fe0a0;}
+  .sim button.active{background:#44BB66;color:#06210f;border-color:#44BB66;}
+  .sim .lbl{color:#7a9486;font-weight:700;padding:0 4px;letter-spacing:.1em;}
+</style>
+</head>
+<body>
+<div id="stage" class="light driving">
+
+  <!-- LEFT: Projected range -->
+  <div class="panel p-range">
+    <div class="title-row">
+      <div class="title">Projected range</div>
+      <div class="spacer"></div>
+      <div class="iconbtn" id="btnTheme" title="Toggle theme">🌙</div>
+      <div class="iconbtn" id="btnSettings" title="Settings">⚙</div>
+    </div>
+
+    <!-- driving illustration (replaces emoji) -->
+    <svg class="car" id="car" viewBox="0 0 160 92" xmlns="http://www.w3.org/2000/svg">
+      <!-- body -->
+      <path class="body" d="M14 54 q2-22 22-24 l44-2 q14 0 26 14 l20 8 q12 3 12 14 l0 8 q0 6-6 6 l-118 0 q-6 0-6-6 z"/>
+      <!-- windows -->
+      <path class="glass" d="M40 34 l34-1 q9 0 17 9 l-2 8 l-49 1 z"/>
+      <!-- roof rack line -->
+      <rect class="body" x="34" y="26" width="42" height="4" rx="2"/>
+      <!-- wheels -->
+      <circle class="wheel" cx="44" cy="78" r="12"/><circle cx="44" cy="78" r="5" fill="#cfd9d0"/>
+      <circle class="wheel" cx="108" cy="78" r="12"/><circle cx="108" cy="78" r="5" fill="#cfd9d0"/>
+      <!-- road -->
+      <line class="road" x1="2" y1="90" x2="158" y2="90"/>
+    </svg>
+
+    <div class="range-km" id="rangeKm">--</div>
+    <div class="range-sub" id="rangeSub">calibrating…</div>
+
+    <div class="range-foot">
+      <div class="tip"><div class="l">Tip</div><div class="t" id="rangeTip">Drive a few km to build your efficiency profile</div></div>
+      <div class="swap" title="Toggle range / SOC">⇄</div>
+    </div>
+  </div>
+
+  <!-- CENTER: Energy use -->
+  <div class="panel p-energy">
+    <div class="title-row">
+      <div class="title">Energy use</div>
+      <div class="spacer"></div>
+      <div class="seg"><button class="on" id="segDrive">Drive</button><button id="segPark">Parked</button></div>
+      <div class="info" title="14-day efficiency vs speed">i</div>
+    </div>
+
+    <div class="chart-area">
+      <div class="yaxis" id="yaxis"><span>3.5</span><span>1.8</span><span>0.0</span><span>+1.8</span><span>+3.5</span></div>
+      <div class="chart" id="chart">
+        <div class="gl" style="top:0"></div>
+        <div class="gl" style="top:29%"></div>
+        <div class="zero" id="zeroLine" style="top:58%"></div>
+        <div class="gl" style="top:79%"></div>
+        <div class="bars" id="bars"></div>
+        <div class="tooltip" id="tooltip" style="display:none;left:55%;top:24%">
+          <b id="ttKwh">1.43 kWh</b><br><span class="g" id="ttRegen">+0.65 kWh</span><br><span class="tm" id="ttTime">5:42–5:50 pm</span>
+          <div class="dot"></div>
+        </div>
+      </div>
+    </div>
+    <div class="xaxis" id="xaxis"><span>—</span><span>—</span><span>—</span></div>
+
+    <!-- GAP then stats -->
+    <div class="estats">
+      <div class="drivepill">Current drive ⌃</div>
+      <div class="estat"><div class="v" id="effVal">--<small>Wh/km</small></div><div class="l">Efficiency</div></div>
+      <div class="estat"><div class="v" id="distVal">0.0<small>km</small></div><div class="l">Distance</div></div>
+      <div class="estat"><div class="v" id="spdVal">--<small>km/h</small></div><div class="l">Avg speed</div></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Session -->
+  <div class="panel p-session">
+    <div class="title-row"><div class="title">Session</div><div class="spacer"></div><div class="info" title="Trip history">i</div></div>
+    <div class="sess-top"><span class="session-time" id="sessTime">0h 00m</span><div class="spacer"></div><span class="iconbtn">🚗</span><span class="iconbtn">⇄</span></div>
+
+    <div class="ring-wrap">
+      <svg viewBox="0 0 200 200">
+        <circle id="ringTrack" cx="100" cy="100" r="78" fill="none" stroke="var(--track)" stroke-width="20"
+          stroke-linecap="round" transform="rotate(110 100 100)"/>
+        <circle id="ringArc" cx="100" cy="100" r="78" fill="none" stroke="var(--orange)" stroke-width="20"
+          stroke-linecap="round" transform="rotate(110 100 100)"
+          style="transition:stroke-dasharray .55s cubic-bezier(.22,.61,.36,1),stroke .45s;"/>
+        <circle id="ringTip" cx="100" cy="100" r="78" fill="none" stroke="var(--green)" stroke-width="20"
+          stroke-linecap="round" transform="rotate(110 100 100)"
+          style="transition:stroke-dasharray .55s cubic-bezier(.22,.61,.36,1);"/>
+        <text id="ringNum" class="ring-num" x="100" y="96" text-anchor="middle" dominant-baseline="central" font-size="52">--</text>
+        <text id="ringUnit" class="ring-unit" x="100" y="128" text-anchor="middle" font-size="16">% SOC</text>
+      </svg>
+    </div>
+
+    <div class="sgrid">
+      <div class="scell"><div class="l">Remaining</div><div class="v" id="rem">-- kWh</div></div>
+      <div class="scell"><div class="l">Consumed</div><div class="v" id="cons">-- kWh</div></div>
+    </div>
+    <div class="reset" id="btnReset">RESET TRIP</div>
+  </div>
+</div>
+
+<div class="sim">
+  <span class="lbl">SIM</span>
+  <button id="bDrive" class="active">Drive</button>
+  <button id="bIdle">Idle</button>
+  <button id="bLow">Low batt</button>
+</div>
+
+<script>
+const stage=document.getElementById('stage');
+function fit(){ const s=Math.min(window.innerWidth/1024, window.innerHeight/600); stage.style.transform='scale('+s+')'; }
+addEventListener('resize',fit); fit();
+
+let dark=false;
+document.getElementById('btnTheme').onclick=()=>{ dark=!dark;
+  stage.className=(dark?'dark':'light')+(mode!=='idle'?' driving':'');
+  document.getElementById('btnTheme').textContent=dark?'☀️':'🌙'; };
+
+document.getElementById('segDrive').onclick=function(){this.classList.add('on');document.getElementById('segPark').classList.remove('on');};
+document.getElementById('segPark').onclick=function(){this.classList.add('on');document.getElementById('segDrive').classList.remove('on');};
+
+// ── SOC ring: 320° sweep, gap at bottom (matches BatteryCircleView) ──
+const R=78, C=2*Math.PI*R, ARC=C*320/360;
+document.getElementById('ringTrack').setAttribute('stroke-dasharray',`${ARC.toFixed(1)} ${(C-ARC).toFixed(1)}`);
+
+// ── model: only the real dashboard values ──
+const PACK_KWH=40;
+let soc=78, sessionWh=0, distKm=0, tripStart=Date.now(), avgSum=0, avgN=0, spd=0, t=0, mode='drive';
+let buckets=[]; // {up: consumed kWh, dn: regen kWh, ts}
+const lerp=(a,b,k)=>a+(b-a)*k;
+
+function setDrivingClass(){ stage.className=(dark?'dark':'light')+(mode!=='idle'?' driving':''); }
+function setMode(m){ mode=m;
+  ['Drive','Idle','Low'].forEach(x=>document.getElementById('b'+x).classList.toggle('active',x.toLowerCase()===m));
+  setDrivingClass(); }
+document.getElementById('bDrive').onclick=()=>setMode('drive');
+document.getElementById('bIdle').onclick=()=>setMode('idle');
+document.getElementById('bLow').onclick=()=>{ soc=11; setMode('drive'); };
+document.getElementById('btnReset').onclick=()=>{ sessionWh=0; distKm=0; tripStart=Date.now(); avgSum=0; avgN=0; buckets=[]; };
+
+(function seed(){ const now=Date.now(); for(let i=8;i>=0;i--){
+  buckets.push({up:1.0+Math.random()*2.3, dn:Math.random()*1.0, ts:now-i*300000}); } })();
+
+let lastBucket=Date.now();
+function tick(){
+  t+=0.016;
+  spd = (mode==='idle') ? lerp(spd,0,0.06) : lerp(spd, Math.max(0,56+30*Math.sin(t*0.16)+8*Math.sin(t*0.7)), 0.05);
+  const dt=0.016/3600;
+  distKm += spd*dt;
+  const instWh = spd>1 ? (150+(spd>80?(spd-80)*4:0)+40*Math.max(0,Math.sin(t*0.16)))*spd*dt : 0;
+  sessionWh += instWh;
+  soc = Math.max(0, soc - instWh/(PACK_KWH*1000)*100);
+  if(spd>0){ avgSum+=spd; avgN++; }
+  if(Date.now()-lastBucket>5000){ buckets.push({up:0.8+Math.random()*2.4, dn:Math.random()*1.1, ts:Date.now()});
+    if(buckets.length>10) buckets.shift(); lastBucket=Date.now(); }
+  render();
+  requestAnimationFrame(tick);
+}
+
+function render(){
+  const mins=Math.floor((Date.now()-tripStart)/60000);
+  document.getElementById('sessTime').textContent=`${Math.floor(mins/60)}h ${String(mins%60).padStart(2,'0')}m`;
+
+  // ring (SOC%)
+  document.getElementById('ringArc').setAttribute('stroke-dasharray',`${(ARC*soc/100).toFixed(1)} ${(C-ARC*soc/100).toFixed(1)}`);
+  document.getElementById('ringArc').setAttribute('stroke', soc>30?'var(--orange)':(soc>15?'#e07b2b':'#CC2200'));
+  // small green "regen" tip at the leading edge for the Rivian two-tone look
+  const tipLen=Math.min(ARC*0.06, ARC*soc/100);
+  document.getElementById('ringTip').setAttribute('stroke-dasharray',`${tipLen.toFixed(1)} ${(C-tipLen).toFixed(1)}`);
+  document.getElementById('ringNum').textContent=soc>0?Math.round(soc):'--';
+
+  const remKwh=PACK_KWH*soc/100;
+  document.getElementById('rem').textContent=remKwh>0?`${remKwh.toFixed(1)} kWh`:'-- kWh';
+  document.getElementById('cons').textContent=sessionWh>1?`${(sessionWh/1000).toFixed(2)} kWh`:'-- kWh';
+
+  const eff=distKm>0.05?sessionWh/distKm:0;
+  document.getElementById('effVal').innerHTML = eff>0?`${Math.round(eff)}<small>Wh/km</small>`:`--<small>Wh/km</small>`;
+  document.getElementById('distVal').innerHTML=`${distKm.toFixed(1)}<small>km</small>`;
+  document.getElementById('spdVal').innerHTML = avgN?`${Math.round(avgSum/avgN)}<small>km/h</small>`:`--<small>km/h</small>`;
+
+  const range=eff>0?(remKwh*1000)/eff:0;
+  updateRange(range);
+  renderChart();
+}
+
+function renderChart(){
+  const bars=document.getElementById('bars');
+  const maxUp=Math.max(...buckets.map(b=>b.up),0.1);
+  const maxDn=Math.max(...buckets.map(b=>b.dn),0.1);
+  const scale=Math.max(maxUp,maxDn,1);
+  // y-axis labels reflect scale
+  const ya=document.getElementById('yaxis').children;
+  ya[0].textContent=scale.toFixed(1); ya[1].textContent=(scale/2).toFixed(1);
+  ya[2].textContent='0.0'; ya[3].textContent='+'+(scale/2).toFixed(1); ya[4].textContent='+'+scale.toFixed(1);
+  const ZERO=58; // % from top
+  bars.innerHTML='';
+  buckets.forEach(b=>{
+    const col=document.createElement('div'); col.className='bcol';
+    const up=document.createElement('div'); up.className='bar-up';
+    up.style.bottom=(100-ZERO)+'%'; up.style.height=(b.up/scale*ZERO*0.96)+'%';
+    const dn=document.createElement('div'); dn.className='bar-dn';
+    dn.style.top=ZERO+'%'; dn.style.height=(b.dn/scale*(100-ZERO)*0.96)+'%';
+    col.appendChild(up); col.appendChild(dn); bars.appendChild(col);
+  });
+  // x-axis times (first / mid / last)
+  const xa=document.getElementById('xaxis').children;
+  const fmt=ts=>{const d=new Date(ts);let h=d.getHours();const m=String(d.getMinutes()).padStart(2,'0');const ap=h>=12?'pm':'am';h=h%12||12;return `${h}:${m} ${ap}`;};
+  if(buckets.length){ xa[0].textContent=fmt(buckets[0].ts);
+    xa[1].textContent=fmt(buckets[Math.floor(buckets.length/2)].ts);
+    xa[2].textContent=fmt(buckets[buckets.length-1].ts); }
+  // live tooltip on the latest-but-one bucket
+  const tt=document.getElementById('tooltip');
+  if(buckets.length>=3){ const b=buckets[buckets.length-2];
+    document.getElementById('ttKwh').textContent=b.up.toFixed(2)+' kWh';
+    document.getElementById('ttRegen').textContent='+'+b.dn.toFixed(2)+' kWh';
+    document.getElementById('ttTime').textContent=fmt(b.ts);
+    const idx=buckets.length-2; tt.style.left=((idx+0.5)/buckets.length*100)+'%'; tt.style.display=''; }
+}
+
+function updateRange(rangeKm){
+  let sub,tip;
+  if(rangeKm<=0){ sub='calibrating…'; tip='Drive a few km to build your efficiency profile'; }
+  else if(rangeKm>150){ sub='open road ahead'; tip="Landy is barely breathing. Take the scenic route!"; }
+  else if(rangeKm>100){ sub='right on target'; tip='On track. Coast downhill in gear — momentum is free range.'; }
+  else if(rangeKm>60){ sub='plenty in reserve'; tip='Smooth inputs. Regen on every slowdown — it adds up.'; }
+  else if(rangeKm>30){ sub='start planning ahead'; tip='Know your next charge point before you arrive at it.'; }
+  else if(rangeKm>15){ sub='find a charger now'; tip='Drop to 80 km/h, A/C off, coast on every downhill.'; }
+  else { sub='charge immediately'; tip='Stop safely and plug in — battery protection may activate soon.'; }
+  document.getElementById('rangeKm').textContent = rangeKm>0?`${Math.round(rangeKm)} km`:'--';
+  document.getElementById('rangeSub').textContent=sub;
+  document.getElementById('rangeTip').textContent=tip;
+}
+
+setMode('drive'); tick();
+</script>
+</body>
+</html>

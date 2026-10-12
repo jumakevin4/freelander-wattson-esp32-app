@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Bluetooth permissions (legacy, Android 11 and below) -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- Android 12+ — the app only connects to already-paired devices, no scanning -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- GPS — used for trip elevation (altitude) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
+    <!-- Firmware update: read a .bin from internal storage / USB / SD with the
+         built-in browser. READ covers Android 10 (the ATOTO); Android 11+ needs
+         "All files access" because a .bin isn't media. Sideloaded app, so the
+         Play policy on MANAGE_EXTERNAL_STORAGE doesn't apply. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
+    <!-- Open automatically when the head unit starts (BootReceiver). Android 10
+         only lets an app open a screen from the background with "Display over
+         other apps" granted, which Settings offers to switch on. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <application
+        android:allowBackup="false"
+        android:requestLegacyExternalStorage="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_wattson"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_wattson"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.LandroverEV"
+        tools:targetApi="31">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="landscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- keepScreenOn is a View attribute, not valid in the manifest —
+             DashboardActivity sets FLAG_KEEP_SCREEN_ON in code instead.
+             singleTask: only ever ONE dashboard. A second one (auto-start plus a
+             launcher tap) would fight the first for the ESP32's single
+             Bluetooth connection; starting it again now reuses the live one. -->
+        <activity
+            android:name=".DashboardActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape" />
+
+        <!-- Exported so the system can deliver boot broadcasts. All it can do is
+             open the app, so a spoofed QUICKBOOT broadcast is harmless. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <activity
+            android:name=".DetailsActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <activity
+            android:name=".EnergyChartActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <activity
+            android:name=".ElevationActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:windowSoftInputMode="adjustResize" />
+
+    </application>
+
+</manifest>

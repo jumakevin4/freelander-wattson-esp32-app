@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/elevRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000"
+    android:padding="12dp">
+
+    <!-- Header: back button + title (matches the Energy chart page) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="4dp">
+
+        <!-- Back button removed in favour of the system back gesture, so the
+             invisible spacer that balanced it is gone too. -->
+        <TextView
+            android:id="@+id/tvElevChartTitle"
+            android:text="Trip Elevation"
+            android:textColor="#7FC49A"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" />
+
+    </LinearLayout>
+
+    <!-- High / Low summary -->
+    <TextView
+        android:id="@+id/tvElevSummary"
+        android:text="↑ -- m   ·   ↓ -- m"
+        android:textColor="#2D6B40"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Chart -->
+    <com.github.mikephil.charting.charts.LineChart
+        android:id="@+id/elevationChart"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+</LinearLayout>
