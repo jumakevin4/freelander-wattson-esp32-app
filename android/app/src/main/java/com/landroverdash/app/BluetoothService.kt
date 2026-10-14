@@ -28,6 +28,9 @@ import java.util.UUID
  *   {"type":"data","ts":ms,...}        — buffered record with ESP32 uptime timestamp
  *   {"type":"sync_end"}                — sync complete
  *   {no "type" field}                  — normal real-time packet
+ *   {"type":"bms","cells":[…],"temps":[…]} — BMS cell voltages and module
+ *                                       temperatures, once a second (see
+ *                                       LiveBatteryData)
  *
  * Buffered records are emitted as CarData with isSynced=true. From firmware
  * v7.3 live packets keep arriving DURING a sync (interleaved), so consumers
@@ -275,6 +278,10 @@ class BluetoothService {
                 }
 
                 "fw" -> _firmwareInfo.value = j
+
+                // Cell voltages and module temperatures from the BMS boards,
+                // once a second. Format: see LiveBatteryData.
+                "bms" -> LiveBatteryData.onPacket(j)
 
                 // Normal real-time packet — no "type" field at all.
                 "" -> _dataFlow.emit(parseCarData(j))

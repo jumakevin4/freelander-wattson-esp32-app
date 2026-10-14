@@ -15,6 +15,18 @@
  *          Android app     : telemetry over Bluetooth Classic SPP
  *  LOGS    SD card         : every sample as CSV, plus a fault history
  *
+ * v7.4 changes
+ * ------------
+ *  - CURRENT CALIBRATION: IDC_SCALE 1.0 → 1.85. On a test drive the battery
+ *    went 100 → 74 % (≈ 2.99 kWh of the ~11.5 kWh usable) while the app
+ *    integrated only 1.58 kWh from udc × idc, a ratio of 1.89. 1.85 is the
+ *    middle of the 1.8–1.9 estimate. Energy used, kW, peak current, the SD log
+ *    and the history sync all carry the corrected current.
+ *  - REV COUNTER keeps its feel: RPM_PER_AMP is now 35 / IDC_SCALE, so the
+ *    needle sits where it did for the same pedal.
+ *  - FUEL NEEDLE: i × PACK_R now undoes the whole load sag. PACK_R (0.12 Ω) is
+ *    in true amps; with idc reading low it undid only about half of it.
+ *
  * v7.3 changes
  * ------------
  *  - BOOT ORDER: the cluster-facing outputs come up first — fuel needle, then
@@ -170,7 +182,7 @@
  *   SD    : WeAct TF slot — CS 13, SCK 14, MOSI 15, MISO 2 (FAT32/FAT16, MBR)
  */
 
-#define FW_VERSION "v7.3"
+#define FW_VERSION "v7.4"
 
 #include <Arduino.h>
 #include "driver/twai.h"
@@ -457,10 +469,14 @@ float getBattVolt()   { return paramFresh(params[IDX_UDC])   ? params[IDX_UDC].v
 // always discharge; magnitude handles the swapped sign convention.
 // IDC_SCALE calibrates openinverter's idc estimate against reality.
 // History: 3.0 → 0.8 (three-trip SOC calibration, il1gain/il2gain = 1.5)
-// → 1.3 → 1.0 (2026-07-11 road feedback). 1.0 = trust idc as-is.
+// → 1.3 → 1.0 (2026-07-11 road feedback) → 1.85 (2026-10-14, test drive:
+// battery 100 → 74 % ≈ 2.99 kWh while the app integrated 1.58 kWh at 1.0,
+// ratio 1.89; 1.85 is the middle of the 1.8–1.9 estimate).
+// idc is the inverter's own estimate and leaves out the DC-DC, so this one
+// factor also absorbs the 12 V load.
 // ⚠ Recalibrate if il1gain/il2gain ever change:
 //   new IDC_SCALE = current IDC_SCALE × (ΔSOC × pack Wh) / (app session Wh)
-#define IDC_SCALE  1.0f
+#define IDC_SCALE  1.85f
 float getBattCurr()   { return paramFresh(params[IDX_CURR])  ? fabsf(params[IDX_CURR].value) * IDC_SCALE : 0.0f; }
 float getBattTempC()  { return paramFresh(params[IDX_TMPHS]) ? params[IDX_TMPHS].value : 0.0f; }  // heatsink
 float getMotorTempC() { return paramFresh(params[IDX_TMPM])  ? params[IDX_TMPM].value  : 0.0f; }
@@ -541,9 +557,11 @@ char getGear() {
 // byte3 0x18→~1000, 0x40→~2500, 0x71→~4500 rpm), so we encode raw = rpm × 6.4.
 // Static bytes below are from the bus sniff table (ign-on / engine-running
 // flags) — tweak them if the needle stays dead despite RPM bytes changing.
-// Calibrated 2026-07-11: hard-pull peak ≈ 128 A (calibrated) × 35 ≈ 4500 rpm
+// Calibrated 2026-07-11 at IDC_SCALE 1.0: hard-pull peak ≈ 128 A × 35 ≈ 4500 rpm
 // — full throttle lands at the top of the dial, cruise reads 1000–2000.
-#define RPM_PER_AMP  35.0f
+// Divided by IDC_SCALE so recalibrating the current doesn't move the needle
+// (at 1.85 the same pull reads ≈ 237 A × 18.9 rpm/A).
+#define RPM_PER_AMP  (35.0f / IDC_SCALE)
 #define RPM_MAX      6000.0f
 static twai_message_t tx316;
 

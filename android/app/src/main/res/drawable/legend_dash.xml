@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Legend key for a dashed average line. Give the view a height of a few dp;
+     the line is drawn through its middle. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="line">
+    <stroke
+        android:width="2dp"
+        android:color="@color/text2"
+        android:dashWidth="5dp"
+        android:dashGap="3dp" />
+</shape>

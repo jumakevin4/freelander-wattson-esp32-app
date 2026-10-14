@@ -1,60 +1,93 @@
 package com.landroverdash.app
 
 import android.Manifest
+import android.app.AlertDialog
 import android.bluetooth.BluetoothManager
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
+import android.content.res.ColorStateList
+import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.text.SpannableStringBuilder
 import android.text.Spanned
-import android.text.style.RelativeSizeSpan
+import android.text.style.ForegroundColorSpan
 import android.view.View
 import android.view.WindowManager
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
-import android.app.AlertDialog
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.appcompat.app.AppCompatActivity
-import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.Locale
+import kotlin.math.abs
 
 /**
- * Dashboard — 3×2 stat grid (Range · Efficiency · Distance / Avg speed ·
- * Session · Elevation) + battery ring. Tap Efficiency → full-screen energy
- * chart page; tap Elevation → elevation profile; ⓘ → trip details.
+ * Drive — the power band dashboard. Owns the Bluetooth link (through its
+ * ViewModel) and stays alive underneath every other screen.
+ *
+ * Range and battery up top, live power across the middle, efficiency against
+ * your average, and a strip with the trip and the car's health. Drive modes
+ * moved to their own screen (Modes); the MODE pill shows the active one.
  */
-class DashboardActivity : AppCompatActivity() {
+class DashboardActivity : WattsonActivity() {
 
     private val viewModel: DashboardViewModel by viewModels()
 
     // ── Views ──────────────────────────────────────────────────────────────
-    private lateinit var batteryCircle:  BatteryCircleView
-    private lateinit var tvStatRangeVal: TextView
-    private lateinit var tvStatEffVal:   TextView
-    private lateinit var tvStatDistVal:  TextView
-    private lateinit var tvStatSpeedVal: TextView
-    private lateinit var tvSessionTime:  TextView
-    private lateinit var tvElevCur:      TextView
-    private lateinit var btnModeEco:     TextView
-    private lateinit var btnModeNormal:  TextView
-    private lateinit var btnModeSport:   TextView
+    private lateinit var linkStatusGroup: View
+    private lateinit var linkDot:         View
+    private lateinit var tvLinkStatus:    TextView
+    private lateinit var acIndicator:     View
+    private lateinit var modePill:        View
+    private lateinit var alertPill:       LinearLayout
+    private lateinit var ivAlertIcon:     ImageView
+    private lateinit var ivAlertChevron:  ImageView
+    private lateinit var tvAlertTitle:    TextView
+    private lateinit var tvAlertDetail:   TextView
+    private lateinit var tvModeName:      TextView
 
-    // Batch-themed view groups
-    private lateinit var panels:  List<LinearLayout>
-    private lateinit var labels:  List<TextView>
+    private lateinit var tvRangeVal:   TextView
+    private lateinit var socBar:       MeterBar
+    private lateinit var tvSoc:        TextView
+    private lateinit var tvRangeBasis: TextView
+
+    private lateinit var tvEffVal:   TextView
+    private lateinit var ivEffTrend: ImageView
+    private lateinit var tvEffDelta: TextView
+    private lateinit var effScale:   EfficiencyScaleView
+
+    private lateinit var tvPowerState: TextView
+    private lateinit var tvPowerVal:   TextView
+    private lateinit var powerBand:    PowerBandView
+
+    private lateinit var tvTripDist:  TextView
+    private lateinit var tvTripTime:  TextView
+    private lateinit var tvTripSpeed: TextView
+    private lateinit var tvTripElev:  TextView
+
+    private lateinit var ivHealthIcon:   ImageView
+    private lateinit var tvHealthStatus: TextView
+    private lateinit var tvMotorLabel:   TextView
+    private lateinit var tvMotorTemp:    TextView
+    private lateinit var motorBar:       MeterBar
+    private lateinit var tvInvLabel:     TextView
+    private lateinit var tvInvTemp:      TextView
+    private lateinit var invBar:         MeterBar
+    private lateinit var tv12vLabel:     TextView
+    private lateinit var tv12v:          TextView
+    private lateinit var tvFaultsLabel:  TextView
+    private lateinit var tvFaults:       TextView
 
     // ── State ──────────────────────────────────────────────────────────────
     private var address: String? = null
@@ -63,31 +96,6 @@ class DashboardActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { granted -> if (granted) viewModel.startLocationTracking() }
 
-    // ── Colors (dark-only) ──────────────────────────────────────────────────
-    private val rootBg    = Color.parseColor("#000000")
-    private val labelText = Color.parseColor("#DDEEDF")
-    private val valueText = Color.WHITE
-
-    // Earthy accent palette: Range = teal, Efficiency = amber,
-    // Distance = steel blue, Session = olive, Elevation = clay;
-    // Avg speed stays the white anchor.
-    private val accentTeal  = Color.parseColor("#4DD0C4")
-    private val accentAmber = Color.parseColor("#FFC14D")
-    private val accentBlue  = Color.parseColor("#7EB6FF")
-    private val accentOlive = Color.parseColor("#D8D27E")
-    private val accentClay  = Color.parseColor("#E8926B")
-
-    /** Text on the selected (pale) drive-mode chip. */
-    private val chipOnText  = Color.parseColor("#08110C")
-
-    // ── Drive-mode double-tap confirmation ──────────────────────────────────
-    /** Mode awaiting a confirming second tap, or null. */
-    private var armedMode: String? = null
-    /**
-     * Mode the ESP32 reports as active. Blank until the first packet lands, so
-     * no chip is highlighted rather than falsely highlighting NORMAL.
-     */
-    private var activeMode = ""
     /** Latest link state, written by the collector and read by the supervisor. */
     @Volatile private var connected = false
 
@@ -101,7 +109,10 @@ class DashboardActivity : AppCompatActivity() {
     private var inverterSilent = true
     /** Inverter answering but still Off, and no battery % known yet. */
     private var socWaitsForRun = false
-    private var tvLinkStatus: TextView? = null
+
+    /** Latest health, so the alert pill and the link status agree on who shows. */
+    private var health: Health.State? = null
+    private var linkText = ""
 
     /**
      * BLUETOOTH_CONNECT is required from API 31 for both
@@ -113,19 +124,12 @@ class DashboardActivity : AppCompatActivity() {
         ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
             PackageManager.PERMISSION_GRANTED
 
-    /** Whether the current low-12 V condition has been shown to the user. */
-    private var auxShown = false
-
     /** Failed connects (~2–4 min with retry and connect time) before offering
      *  the picker. Was 60 (~10 min), long enough to look like a hung app. */
     private val UNREACHABLE_ATTEMPTS = 24
 
     /** Failures before the status line names a cause instead of "Connecting…". */
     private val EXPLAIN_AFTER_ATTEMPTS = 3
-
-    private val armHandler = Handler(Looper.getMainLooper())
-    private val disarm = Runnable { armedMode = null; renderModeChips() }
-    private val ARM_TIMEOUT_MS = 3000L
 
     // ══════════════════════════════════════════════════════════════════════
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -136,9 +140,7 @@ class DashboardActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         bindViews()
-        buildThemeLists()
-        applyTheme()
-        renderModeChips()   // paint the chips before the first packet arrives
+        bindNavRail(Screen.DRIVE)
 
         // BT connect — address is required, else bail back to picker
         address = intent.getStringExtra("device_address")
@@ -173,48 +175,33 @@ class DashboardActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this) { moveTaskToBack(true) }
 
         // Clicks
-        findViewById<TextView>(R.id.btnSettings).apply {
-            expandTouchArea(12)
-            setOnClickListener {
-                startActivity(Intent(this@DashboardActivity, SettingsActivity::class.java))
-            }
+        findViewById<View>(R.id.btnResetTrip).setOnClickListener { confirmResetTrip() }
+        modePill.setOnClickListener {
+            navigateTo(Screen.MODES, Screen.DRIVE)
         }
-        findViewById<TextView>(R.id.btnResetTrip).apply {
-            expandTouchArea(14)
-            setOnClickListener {
-                it.parent.requestDisallowInterceptTouchEvent(true)
-                confirmResetTrip()
-            }
+        findViewById<View>(R.id.cardEfficiency).setOnClickListener {
+            navigateTo(Screen.ENERGY, Screen.DRIVE)
         }
-        // Tap the Session tile (ⓘ next to its label) → trip data + history
-        findViewById<LinearLayout>(R.id.cellSession).setOnClickListener {
-            // No snapshot extras — the details page observes LiveVehicleData
-            // so its panel updates with every packet while it's open.
-            startActivity(Intent(this, DetailsActivity::class.java))
+        findViewById<View>(R.id.statElevation).setOnClickListener {
+            navigateTo(Screen.TERRAIN, Screen.DRIVE)
         }
-        // Tap Efficiency tile → full-screen trip energy chart
-        findViewById<LinearLayout>(R.id.cellEfficiency).setOnClickListener {
-            openEnergyChart()
+        findViewById<View>(R.id.healthGroup).setOnClickListener {
+            navigateTo(Screen.VEHICLE, Screen.DRIVE)
         }
-        // Tap Elevation tile → elevation profile for the current trip
-        findViewById<LinearLayout>(R.id.rowElevation).setOnClickListener {
-            openElevationProfile()
+        alertPill.setOnClickListener { navigateTo(Screen.VEHICLE, Screen.DRIVE) }
+        // Only acts once the link has been failing long enough to be hopeless;
+        // before that a stray tap on a transient "Connecting…" does nothing.
+        linkStatusGroup.setOnClickListener {
+            if (failedAttempts >= UNREACHABLE_ATTEMPTS) openDevicePicker()
         }
-
-        // Drive mode selector — requires a DOUBLE tap so a stray touch can't
-        // retune the car. The ESP32 stays authoritative: we only REQUEST a
-        // mode, and the chips update when it reports the change back to us.
-        btnModeEco.setOnClickListener    { onModeTap("ECO") }
-        btnModeNormal.setOnClickListener { onModeTap("NORMAL") }
-        btnModeSport.setOnClickListener  { onModeTap("SPORT") }
 
         ensureLocationPermission()
         observeViewModel()
     }
 
     /**
-     * RESET TRIP used to wipe the trip on one tap, unsaved. Now it asks first,
-     * then saves the trip to history before starting a new one.
+     * RESET TRIP asks first, then saves the trip to history before starting a
+     * new one.
      */
     private fun confirmResetTrip() {
         val km = viewModel.tripDistanceKm.value
@@ -254,78 +241,56 @@ class DashboardActivity : AppCompatActivity() {
         }
     }
 
-    private fun openEnergyChart() {
-        val buckets = viewModel.energyBuckets.value
-        val intent = Intent(this, EnergyChartActivity::class.java)
-        intent.putExtra(EnergyChartActivity.EXTRA_TS, LongArray(buckets.size) { buckets[it].timestampMs })
-        intent.putExtra(EnergyChartActivity.EXTRA_WH, FloatArray(buckets.size) { buckets[it].wh })
-        intent.putExtra(EnergyChartActivity.EXTRA_GRAN_MIN, viewModel.bucketMinutes.value)
-        startActivity(intent)
-    }
-
-    private fun openElevationProfile() {
-        val profile = viewModel.elevationProfile.value
-        val intent = Intent(this, ElevationActivity::class.java)
-        intent.putExtra(ElevationActivity.EXTRA_DIST, FloatArray(profile.size) { profile[it].distanceKm })
-        intent.putExtra(ElevationActivity.EXTRA_ALT,  FloatArray(profile.size) { profile[it].altitudeM })
-        intent.putExtra(ElevationActivity.EXTRA_MIN,  viewModel.minElevationM.value)
-        intent.putExtra(ElevationActivity.EXTRA_MAX,  viewModel.maxElevationM.value)
-        startActivity(intent)
-    }
-
     // ══════════════════════════════════════════════════════════════════════
     private fun bindViews() {
-        batteryCircle  = findViewById(R.id.batteryCircle)
-        tvStatRangeVal = findViewById(R.id.tvStatRangeVal)
-        tvStatEffVal   = findViewById(R.id.tvStatEffVal)
-        tvStatDistVal  = findViewById(R.id.tvStatDistVal)
-        tvStatSpeedVal = findViewById(R.id.tvStatSpeedVal)
-        tvSessionTime  = findViewById(R.id.tvSessionTime)
-        tvElevCur      = findViewById(R.id.tvElevCur)
-        btnModeEco     = findViewById(R.id.btnModeEco)
-        btnModeNormal  = findViewById(R.id.btnModeNormal)
-        btnModeSport   = findViewById(R.id.btnModeSport)
-        tvLinkStatus   = findViewById(R.id.tvLinkStatus)
-        // Only acts once the link has been failing long enough to be hopeless;
-        // before that a stray tap on a transient "Connecting…" does nothing.
-        tvLinkStatus?.setOnClickListener {
-            if (failedAttempts >= UNREACHABLE_ATTEMPTS) openDevicePicker()
-        }
-    }
+        linkStatusGroup = findViewById(R.id.linkStatusGroup)
+        linkDot         = findViewById(R.id.linkDot)
+        tvLinkStatus    = findViewById(R.id.tvLinkStatus)
+        acIndicator     = findViewById(R.id.acIndicator)
+        modePill        = findViewById(R.id.modePill)
+        alertPill       = findViewById(R.id.alertPill)
+        ivAlertIcon     = findViewById(R.id.ivAlertIcon)
+        ivAlertChevron  = findViewById(R.id.ivAlertChevron)
+        tvAlertTitle    = findViewById(R.id.tvAlertTitle)
+        tvAlertDetail   = findViewById(R.id.tvAlertDetail)
+        tvModeName      = findViewById(R.id.tvModeName)
 
-    private fun buildThemeLists() {
-        // Single pane — one tile background around the whole dashboard
-        panels = listOf(
-            findViewById(R.id.panelMain)
-        )
-        labels = listOf(
-            findViewById(R.id.tvStatRangeLbl),
-            findViewById(R.id.tvStatEffLbl),
-            findViewById(R.id.tvStatDistLbl),
-            findViewById(R.id.tvStatSpeedLbl),
-            findViewById(R.id.tvSessionLbl),
-            findViewById(R.id.tvSessionHint),
-            findViewById(R.id.tvElevTitle),
-            findViewById(R.id.tvElevHint),
-            findViewById(R.id.tvEffHint)
-        )
-        // (stat values get individual accent colours in applyTheme)
+        tvRangeVal   = findViewById(R.id.tvRangeVal)
+        socBar       = findViewById(R.id.socBar)
+        tvSoc        = findViewById(R.id.tvSoc)
+        tvRangeBasis = findViewById(R.id.tvRangeBasis)
+
+        tvEffVal   = findViewById(R.id.tvEffVal)
+        ivEffTrend = findViewById(R.id.ivEffTrend)
+        tvEffDelta = findViewById(R.id.tvEffDelta)
+        effScale   = findViewById(R.id.effScale)
+
+        tvPowerState = findViewById(R.id.tvPowerState)
+        tvPowerVal   = findViewById(R.id.tvPowerVal)
+        powerBand    = findViewById(R.id.powerBand)
+
+        tvTripDist  = findViewById(R.id.tvTripDist)
+        tvTripTime  = findViewById(R.id.tvTripTime)
+        tvTripSpeed = findViewById(R.id.tvTripSpeed)
+        tvTripElev  = findViewById(R.id.tvTripElev)
+
+        ivHealthIcon   = findViewById(R.id.ivHealthIcon)
+        tvHealthStatus = findViewById(R.id.tvHealthStatus)
+        tvMotorLabel   = findViewById(R.id.tvMotorLabel)
+        tvMotorTemp    = findViewById(R.id.tvMotorTemp)
+        motorBar       = findViewById(R.id.motorBar)
+        tvInvLabel     = findViewById(R.id.tvInvLabel)
+        tvInvTemp      = findViewById(R.id.tvInvTemp)
+        invBar         = findViewById(R.id.invBar)
+        tv12vLabel     = findViewById(R.id.tv12vLabel)
+        tv12v          = findViewById(R.id.tv12v)
+        tvFaultsLabel  = findViewById(R.id.tvFaultsLabel)
+        tvFaults       = findViewById(R.id.tvFaults)
     }
 
     // ══════════════════════════════════════════════════════════════════════
     //  ViewModel observers
     // ══════════════════════════════════════════════════════════════════════
-
-    /**
-     * "62 km" with the unit shrunk so the number dominates. [unitScale] can be
-     * tightened for wide units (km/kWh) so they don't force the whole value to
-     * auto-shrink.
-     */
-    private fun statText(value: String, unit: String, unitScale: Float = 0.38f): CharSequence =
-        SpannableStringBuilder("$value $unit").apply {
-            setSpan(RelativeSizeSpan(unitScale), value.length, length,
-                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
 
     private fun observeViewModel() {
         // UI collectors: scoped to STARTED so they stop updating views while the
@@ -334,9 +299,9 @@ class DashboardActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     viewModel.carData.collect { d ->
-                        batteryCircle.soc = d.battSOC
+                        renderSoc(d.battSOC)
                         // No reply from the inverter at all, vs. answering but
-                        // not running yet (so the ring reads "--" on purpose).
+                        // not running yet (so the battery % reads "--" on purpose).
                         val silent  = d.errCode < 0 && d.battVoltage <= 0f
                         val waitRun = !silent && d.battSOC < 0 && d.dcLinkUp == false
                         if (silent != inverterSilent || waitRun != socWaitsForRun) {
@@ -346,89 +311,90 @@ class DashboardActivity : AppCompatActivity() {
                         }
                     }
                 }
-                // remainingKwh is no longer drawn in the ring, but the flow is
-                // still used for the range projection in the ViewModel.
                 launch {
-                    // Displayed as km/kWh (= 1000 / Wh/km). Wh/km stays the
-                    // internal unit because the range maths needs it.
-                    viewModel.efficiencyWhPerKm.collect { eff ->
-                        // km/kWh is the widest unit here — a tighter suffix lets
-                        // the number itself stay large.
-                        tvStatEffVal.text = statText(
-                            if (eff > 0f) "%.1f".format(1000f / eff) else "--",
-                            "km/kWh", unitScale = 0.30f)
+                    viewModel.projectedRangeKm.collect { range ->
+                        tvRangeVal.text = Fmt.whole(range)
+                        // Unknown reads as a quiet dash rather than a big white one.
+                        tvRangeVal.setTextColor(color(if (range > 0f) R.color.text else R.color.text_muted))
+                    }
+                }
+                launch {
+                    LiveTripData.rangeBasisWhPerKm.combine(LiveTripData.rangeBasisIsLifetime) { b, life ->
+                        b to life
+                    }.collect { (basis, lifetime) -> renderRangeBasis(basis, lifetime) }
+                }
+                launch {
+                    viewModel.efficiencyWhPerKm.combine(viewModel.lifetimeEffWhPerKm) { trip, avg ->
+                        trip to avg
+                    }.collect { (trip, avg) -> renderEfficiency(trip, avg) }
+                }
+                launch {
+                    LiveVehicleData.powerKw.combine(LiveVehicleData.voltageV) { p, v -> p to v }
+                        .collect { (p, v) -> renderPower(p, v > 0f) }
+                }
+                launch {
+                    viewModel.tripDistanceKm.collect { dist ->
+                        tvTripDist.text = Fmt.valueUnit(this@DashboardActivity,
+                            String.format(Locale.US, "%.1f", dist), "km")
                     }
                 }
                 launch {
                     viewModel.tripTimeMin.collect { mins ->
-                        tvSessionTime.text = sessionText(mins)
+                        tvTripTime.text = Fmt.hoursMinutes(this@DashboardActivity, mins)
                     }
                 }
                 launch {
                     viewModel.avgSpeedKmh.collect { avg ->
-                        tvStatSpeedVal.text = statText(if (avg > 0f) "%.0f".format(avg) else "--", "km/h")
-                    }
-                }
-                launch {
-                    viewModel.tripDistanceKm.collect { dist ->
-                        tvStatDistVal.text = statText("%.1f".format(dist), "km")
-                    }
-                }
-                launch {
-                    viewModel.projectedRangeKm.collect { range ->
-                        tvStatRangeVal.text = statText(if (range > 0f) "%.0f".format(range) else "--", "km")
+                        tvTripSpeed.text = Fmt.valueUnit(this@DashboardActivity, Fmt.whole(avg), "km/h")
                     }
                 }
                 launch {
                     viewModel.currentElevationM.collect { m ->
-                        tvElevCur.text = statText(if (m.isNaN()) "--" else "%.0f".format(m), "m")
+                        tvTripElev.text = Fmt.valueUnit(this@DashboardActivity,
+                            if (m.isNaN()) Fmt.NONE else Fmt.grouped(m), "m")
                     }
                 }
                 launch {
-                    viewModel.driveMode.collect { mode -> showDriveMode(mode) }
+                    LiveVehicleData.driveMode.collect { mode ->
+                        // "Normal", "Eco", "Sport": sentence case, like the old
+                        // "Connected" line this replaced.
+                        val name = mode.trim().lowercase(Locale.US)
+                            .replaceFirstChar { it.titlecase(Locale.US) }
+                        tvModeName.text = name.ifEmpty { Fmt.NONE }
+                        modePill.contentDescription = if (name.isEmpty())
+                            "Drive mode not known yet. Opens drive modes."
+                        else "Drive mode $name. Opens drive modes."
+                    }
                 }
                 launch {
-                    // e.g. "vehicle moving — stop first". The flow replays its
-                    // latest refusal to every new collector, i.e. on every return
-                    // from Settings — compare by identity so only a NEW refusal
-                    // (a new String from a new reply) is shown.
+                    LiveVehicleData.acOn.collect { on ->
+                        acIndicator.visibility = if (on) View.VISIBLE else View.GONE
+                    }
+                }
+                launch {
+                    Health.state.collect { h ->
+                        health = h
+                        renderHealth(h)
+                        renderAlert()
+                    }
+                }
+                launch {
+                    // A refusal the Modes screen didn't get to show — it arrived
+                    // after you left it. The flow replays its latest value to
+                    // every new collector, so only one not already shown counts.
                     viewModel.modeRefusals.collect { reason ->
-                        if (reason === viewModel.lastRefusalShown) return@collect
-                        viewModel.lastRefusalShown = reason
-                        Toast.makeText(this@DashboardActivity, reason, Toast.LENGTH_LONG).show()
-                    }
-                }
-                launch {
-                    // 12 V warning. The dashboard grid is full, so this is a
-                    // toast rather than a tile — the reading itself lives on the
-                    // details page.
-                    //
-                    // The latch is in LiveVehicleData, not here, so it tracks the
-                    // rail continuously even while this screen is stopped. This
-                    // collector only decides whether the CURRENT latch state has
-                    // already been announced to the user; auxShown is per-visit,
-                    // so a dip that occurred behind Settings is reported as soon
-                    // as the dashboard is visible again rather than being lost.
-                    LiveVehicleData.auxLow.collect { low ->
-                        if (low && !auxShown) {
-                            auxShown = true
-                            val v = LiveVehicleData.auxVoltageV.value
-                            Toast.makeText(this@DashboardActivity,
-                                "12V LOW: %.1f V — DC-DC not charging".format(v),
-                                Toast.LENGTH_LONG).show()
-                        } else if (!low) {
-                            auxShown = false
-                        }
+                        if (reason === LiveVehicleData.lastModeRefusalShown) return@collect
+                        LiveVehicleData.lastModeRefusalShown = reason
+                        Toast.makeText(this@DashboardActivity,
+                            "Drive mode not changed: $reason", Toast.LENGTH_LONG).show()
                     }
                 }
             }
         }
 
-        // Connection state: recorded for the supervisor, and now SHOWN.
-        //
-        // Previously nothing rendered it, so "ESP32 off", "out of range", "wrong
-        // MAC", "permission denied" and "car parked" all produced an identical
-        // screen of dashes with no way to tell them apart.
+        // Connection state: recorded for the supervisor, and SHOWN — "ESP32 off",
+        // "out of range", "wrong MAC", "permission denied" and "car parked" used
+        // to produce an identical screen of dashes.
         lifecycleScope.launch {
             viewModel.connectionState.collect { state ->
                 connected = state == BluetoothService.ConnectionState.CONNECTED
@@ -436,7 +402,8 @@ class DashboardActivity : AppCompatActivity() {
                     failedAttempts = 0
                     address?.let {
                         getSharedPreferences("prefs", MODE_PRIVATE).edit()
-                            .putString(MainActivity.PREF_LAST_DEVICE, it).apply()
+                            .putString(MainActivity.PREF_LAST_DEVICE, it)
+                            .putString(MainActivity.PREF_LAST_USED, it).apply()
                     }
                 } else if (state == BluetoothService.ConnectionState.ERROR) {
                     failedAttempts++
@@ -446,25 +413,14 @@ class DashboardActivity : AppCompatActivity() {
         }
 
         // Reconnect supervisor. Deliberately a POLLING loop rather than a
-        // reaction to DISCONNECTED/ERROR events.
-        //
-        // The old version retried from inside the state collector, with the
-        // delay in the collector itself. While it slept, connectionState (a
-        // SharedFlow with a one-item buffer) had nowhere to put new values, so
-        // disconnect()'s tryEmit silently returned false and the DISCONNECTED
-        // that should have triggered the next retry was dropped. The loop then
-        // sat idle forever and only a restart brought the app back.
-        //
-        // Polling cannot get stuck that way: it does not care whether any event
-        // arrived. connect() is a no-op when a socket is already live, so
-        // calling it on every tick is harmless.
-        //
-        // Not lifecycle-gated: it must keep retrying while a child screen
-        // (Settings/Details/Chart) covers the dashboard.
-        // Quick retries first: at key-on the head unit's Bluetooth and the
-        // ESP32 come up within seconds of each other, so the first attempts
-        // usually fail only because the other side isn't ready yet. Waiting a
-        // full 5 s after each of those added noticeable delay to every start.
+        // reaction to DISCONNECTED/ERROR events: retrying from inside the state
+        // collector could drop the DISCONNECTED that should trigger the next
+        // retry (one-item buffer), leaving the loop idle until a restart.
+        // connect() is a no-op when a socket is already live, so calling it on
+        // every tick is harmless. Not lifecycle-gated: it must keep retrying
+        // while another screen covers the dashboard. Quick retries first — at
+        // key-on the head unit's Bluetooth and the ESP32 come up within seconds
+        // of each other.
         lifecycleScope.launch {
             while (isActive) {
                 if (!connected) {
@@ -493,6 +449,230 @@ class DashboardActivity : AppCompatActivity() {
         }
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  Rendering
+    // ══════════════════════════════════════════════════════════════════════
+
+    private fun renderSoc(soc: Int) {
+        val fill = when {
+            soc in 0..9   -> color(R.color.crit)
+            soc in 10..19 -> color(R.color.warn)
+            else          -> color(R.color.fill)
+        }
+        socBar.fillColor = fill
+        socBar.fraction = if (soc >= 0) soc / 100f else 0f
+        tvSoc.setTextColor(when {
+            soc < 0 -> color(R.color.text_muted)
+            soc in 0..19 -> fill
+            else -> color(R.color.text)
+        })
+        tvSoc.text = if (soc >= 0)
+            Fmt.valueUnit(this, "$soc", "%", unitSp = 17, gap = "") else Fmt.NONE
+    }
+
+    private fun renderRangeBasis(basisWhPerKm: Float, lifetime: Boolean) {
+        tvRangeBasis.text = when {
+            SettingsActivity.designCapacity(this) <= 0f ->
+                "Set the battery capacity in Settings to see range"
+            basisWhPerKm <= 0f -> "Range appears after a few minutes of driving"
+            lifetime -> "Based on your ${Fmt.kmPerKwh(basisWhPerKm)} km/kWh average"
+            else -> "Based on ${Fmt.kmPerKwh(basisWhPerKm)} km/kWh over the last 30 min"
+        }
+    }
+
+    private fun renderEfficiency(tripWhPerKm: Float, avgWhPerKm: Float) {
+        val trip = if (tripWhPerKm > 0f) 1000f / tripWhPerKm else 0f
+        val avg  = if (avgWhPerKm > 0f) 1000f / avgWhPerKm else 0f
+        tvEffVal.text = Fmt.one(trip)
+        tvEffVal.setTextColor(color(if (trip > 0f) R.color.text else R.color.text_muted))
+        effScale.setValues(trip, avg)
+
+        val accent = color(R.color.accent)
+        val text2  = color(R.color.text2)
+        when {
+            trip <= 0f -> {
+                ivEffTrend.visibility = View.GONE
+                tvEffDelta.text = "Measuring this trip…"
+            }
+            avg <= 0f -> {
+                ivEffTrend.visibility = View.GONE
+                tvEffDelta.text = "No saved trips to compare yet"
+            }
+            else -> {
+                val pct = (trip / avg - 1f) * 100f
+                ivEffTrend.visibility = View.VISIBLE
+                when {
+                    abs(pct) < 1f -> {
+                        ivEffTrend.visibility = View.GONE
+                        tvEffDelta.text = "Right on your average"
+                        effScale.dotColor = text2
+                    }
+                    pct > 0f -> {
+                        ivEffTrend.setImageResource(R.drawable.ic_arrow_up)
+                        ivEffTrend.imageTintList = ColorStateList.valueOf(accent)
+                        val head = String.format(Locale.US, "%.0f%% better", pct)
+                        tvEffDelta.text = SpannableStringBuilder("$head than your average").apply {
+                            setSpan(ForegroundColorSpan(accent), 0, head.length,
+                                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        }
+                        effScale.dotColor = accent
+                    }
+                    else -> {
+                        ivEffTrend.setImageResource(R.drawable.ic_arrow_down)
+                        ivEffTrend.imageTintList = ColorStateList.valueOf(text2)
+                        tvEffDelta.text = String.format(Locale.US,
+                            "%.0f%% below your average", -pct)
+                        effScale.dotColor = text2
+                    }
+                }
+            }
+        }
+    }
+
+    private fun renderPower(kw: Float, live: Boolean) {
+        val accent = color(R.color.accent)
+        powerBand.powerKw = if (live) kw else 0f
+        when {
+            !live -> {
+                tvPowerVal.text = Fmt.NONE
+                tvPowerVal.setTextColor(color(R.color.text_muted))
+                tvPowerState.text = ""
+            }
+            kw <= -0.3f -> {
+                tvPowerVal.text = "−" + String.format(Locale.US, "%.1f", -kw)
+                tvPowerVal.setTextColor(accent)
+                tvPowerState.text = "Regenerating"
+                tvPowerState.setTextColor(accent)
+            }
+            kw >= 0.3f -> {
+                tvPowerVal.text = String.format(Locale.US, "%.1f", kw)
+                tvPowerVal.setTextColor(color(R.color.text))
+                tvPowerState.text = "Drawing"
+                tvPowerState.setTextColor(color(R.color.text2))
+            }
+            else -> {
+                tvPowerVal.text = "0.0"
+                tvPowerVal.setTextColor(color(R.color.text))
+                tvPowerState.text = "Idle"
+                tvPowerState.setTextColor(color(R.color.text3))
+            }
+        }
+    }
+
+    private fun renderHealth(h: Health.State) {
+        val warn  = color(R.color.warn)
+        val crit  = color(R.color.crit)
+        val text  = color(R.color.text)
+        val text3 = color(R.color.text3)
+        val text2 = color(R.color.text2)
+        val warnTrack = color(R.color.warn_track)
+        val line = color(R.color.line)
+
+        fun temp(tv: TextView, label: TextView, bar: MeterBar, c: Float, derate: Float, isWarn: Boolean) {
+            val col = if (isWarn) warn else text
+            tv.setTextColor(col)
+            label.setTextColor(if (isWarn) warn else text3)
+            // 0 means "not reported yet"; anything else, below freezing too, is real.
+            tv.text = Fmt.valueUnit(this, Fmt.whole(c, known = c != 0f), "°C",
+                unitColor = if (isWarn) warn else null)
+            bar.fraction = Health.headroom(c, derate)
+            bar.fillColor = if (isWarn) warn else text2
+            bar.trackColor = if (isWarn) warnTrack else line
+        }
+        temp(tvMotorTemp, tvMotorLabel, motorBar, h.motorC, Health.MOTOR_DERATE_C, h.motorWarn)
+        temp(tvInvTemp, tvInvLabel, invBar, h.inverterC, Health.INVERTER_DERATE_C, h.inverterWarn)
+
+        tv12v.setTextColor(if (h.auxLow) warn else text)
+        tv12vLabel.setTextColor(if (h.auxLow) warn else text3)
+        tv12v.text = Fmt.valueUnit(this, Fmt.one(h.auxV), "V", unitColor = if (h.auxLow) warn else null)
+
+        // Only a temperature fault the readings back up shows here; any other
+        // inverter error is logged under Settings → Inverter instead (it stays
+        // set until the inverter restarts, long after a glitch has passed).
+        when {
+            h.errCode < 0 -> { tvFaults.text = Fmt.NONE; tvFaults.setTextColor(text); tvFaultsLabel.setTextColor(text3) }
+            h.derate != null -> {
+                tvFaults.text = h.errName.ifBlank { "Code ${h.errCode}" }
+                tvFaults.setTextColor(crit)
+                tvFaultsLabel.setTextColor(crit)
+            }
+            else -> { tvFaults.text = "None"; tvFaults.setTextColor(text); tvFaultsLabel.setTextColor(text3) }
+        }
+
+        val noData = h.errCode < 0 && h.motorC == 0f && h.inverterC == 0f
+        when {
+            noData -> {
+                ivHealthIcon.visibility = View.GONE
+                tvHealthStatus.text = "Waiting for data"
+                tvHealthStatus.setTextColor(text3)
+            }
+            h.level == Health.Level.FAULT -> {
+                ivHealthIcon.visibility = View.VISIBLE
+                ivHealthIcon.setImageResource(R.drawable.ic_warning)
+                ivHealthIcon.imageTintList = ColorStateList.valueOf(crit)
+                tvHealthStatus.text =
+                    if (h.derate == Health.Part.MOTOR) "Motor derating" else "Inverter derating"
+                tvHealthStatus.setTextColor(crit)
+            }
+            h.level == Health.Level.WARN -> {
+                ivHealthIcon.visibility = View.VISIBLE
+                ivHealthIcon.setImageResource(R.drawable.ic_warning)
+                ivHealthIcon.imageTintList = ColorStateList.valueOf(warn)
+                tvHealthStatus.text = if (h.warnings == 1) "1 warning" else "${h.warnings} warnings"
+                tvHealthStatus.setTextColor(warn)
+            }
+            else -> {
+                ivHealthIcon.visibility = View.VISIBLE
+                ivHealthIcon.setImageResource(R.drawable.ic_check)
+                ivHealthIcon.imageTintList = ColorStateList.valueOf(color(R.color.accent))
+                tvHealthStatus.text = "All normal"
+                tvHealthStatus.setTextColor(text2)
+            }
+        }
+    }
+
+    /**
+     * The alert pill, on the far right of the header, while something needs
+     * attention. Most serious first: a derate the readings back up, 12 V low,
+     * inverter, motor. Other inverter errors are only logged (Settings →
+     * Inverter): the code stays set until the inverter restarts, so a passing
+     * glitch would otherwise sit here in red all drive.
+     */
+    private fun renderAlert() {
+        val h = health
+        val alert: Triple<String, String, Boolean>? = when {
+            // Only while the link is up: the readings aren't live otherwise.
+            h == null || !connected -> null
+            h.derate != null -> {
+                val motor = h.derate == Health.Part.MOTOR
+                Triple(if (motor) "Motor derating" else "Inverter derating",
+                    "${Fmt.whole(if (motor) h.motorC else h.inverterC)} °C · " +
+                    "${h.errName.ifBlank { "code" }} (${h.errCode})", true)
+            }
+            h.auxLow -> Triple("12 V low · ${Fmt.one(h.auxV)} V", "DC-DC not charging", false)
+            h.inverterWarn -> Triple("Inverter ${Fmt.whole(h.inverterC)} °C",
+                "derates at ${Health.INVERTER_DERATE_C.toInt()} °C", false)
+            h.motorWarn -> Triple("Motor ${Fmt.whole(h.motorC)} °C",
+                "derates at ${Health.MOTOR_DERATE_C.toInt()} °C", false)
+            else -> null
+        }
+        if (alert == null) {
+            alertPill.visibility = View.GONE
+            return
+        }
+        val (title, detail, fault) = alert
+        val main = color(if (fault) R.color.crit else R.color.warn)
+        val soft = color(if (fault) R.color.crit_soft else R.color.warn_soft)
+        alertPill.setBackgroundResource(if (fault) R.drawable.bg_alert_crit else R.drawable.bg_alert_warn)
+        ivAlertIcon.imageTintList = ColorStateList.valueOf(main)
+        ivAlertChevron.imageTintList = ColorStateList.valueOf(main)
+        tvAlertTitle.setTextColor(main)
+        tvAlertDetail.setTextColor(soft)
+        tvAlertTitle.text = title
+        tvAlertDetail.text = detail
+        alertPill.visibility = View.VISIBLE
+    }
+
     /** Turns a raw socket exception message into something actionable. */
     private fun friendlyLinkError(raw: String?): String {
         val e = raw?.lowercase() ?: return "is the car on?"
@@ -509,20 +689,20 @@ class DashboardActivity : AppCompatActivity() {
     }
 
     /**
-     * One line above the grid describing the link. Deliberately terse and only
-     * present when there is something to say — connected and idle shows nothing.
+     * Left of the header: the drive mode when the link is up and all is well;
+     * otherwise what is happening with the link, in words, in its place.
      */
     private fun renderLinkStatus(state: BluetoothService.ConnectionState?) {
         if (state != null) lastLinkState = state
-        val v = tvLinkStatus ?: return
         val btOn = runCatching {
             getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled
         }.getOrNull() != false
-        val text = when {
+        val isConnected = lastLinkState == BluetoothService.ConnectionState.CONNECTED
+        linkText = when {
             syncing -> syncCounts.let { (got, total) ->
                 if (total > 0) "Syncing trip history… $got / $total" else "Syncing trip history…"
             }
-            lastLinkState == BluetoothService.ConnectionState.CONNECTED -> when {
+            isConnected -> when {
                 // Linked to the ESP32 but the inverter hasn't answered yet.
                 inverterSilent -> "Connected — waiting for the inverter"
                 // Before run mode the DC link isn't the pack, so the battery %
@@ -541,19 +721,24 @@ class DashboardActivity : AppCompatActivity() {
                 "Not connected — " + friendlyLinkError(viewModel.lastLinkError())
             else -> "Connecting…"
         }
-        v.text = text
-        v.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
+        val failing = !isConnected && (failedAttempts >= EXPLAIN_AFTER_ATTEMPTS || !btOn)
+        val dotColor = when {
+            isConnected || syncing -> color(R.color.accent)
+            failing -> color(R.color.warn)
+            else -> color(R.color.text3)
+        }
+        linkDot.backgroundTintList = ColorStateList.valueOf(dotColor)
+        renderAlert()
+        tvLinkStatus.text = linkText.ifEmpty { "Connected" }
+        tvLinkStatus.setTextColor(if (failing) color(R.color.warn) else color(R.color.text2))
+        val linkUp = isConnected && linkText.isEmpty()
+        modePill.visibility = if (linkUp) View.VISIBLE else View.GONE
+        linkStatusGroup.visibility = if (linkUp) View.GONE else View.VISIBLE
     }
 
     /**
-     * Escape hatch for a device that can never be reached.
-     *
-     * Auto-connect resolves the saved MAC directly and never checks it is still
-     * bonded, which is correct at startup — bondedDevices is empty for a second
-     * while the stack comes up. But if the ESP32 is unpaired, re-flashed with a
-     * new MAC, or the bond is dropped, the app would auto-launch here on every
-     * start and retry forever with the picker unreachable. After roughly five
-     * minutes of solid failure the status line becomes a way back to it.
+     * Escape hatch for a device that can never be reached: after roughly five
+     * minutes of solid failure the status line becomes a way back to the picker.
      */
     private fun openDevicePicker() {
         getSharedPreferences("prefs", MODE_PRIVATE).edit()
@@ -563,86 +748,6 @@ class DashboardActivity : AppCompatActivity() {
         finish()
     }
 
-    override fun onDestroy() {
-        armHandler.removeCallbacks(disarm)
-        super.onDestroy()
-    }
-
-    /**
-     * First tap arms a mode (amber, "ECO ?"), a second tap within
-     * ARM_TIMEOUT_MS commits it. Tapping the already-active mode, a different
-     * chip, or simply waiting cancels — so no single touch can change the tune.
-     */
-    private fun onModeTap(mode: String) {
-        if (mode.equals(activeMode, ignoreCase = true)) return   // already active
-        if (!connected) {
-            // It used to arm, accept the second tap and then silently drop
-            // the command.
-            armedMode = null
-            armHandler.removeCallbacks(disarm)
-            renderModeChips()
-            Toast.makeText(this, "Not connected to the car — mode not changed",
-                Toast.LENGTH_SHORT).show()
-            return
-        }
-        armHandler.removeCallbacks(disarm)
-        if (armedMode == mode) {                 // confirming tap
-            armedMode = null
-            viewModel.requestDriveMode(mode)
-        } else {                                 // first tap — arm and wait
-            armedMode = mode
-            armHandler.postDelayed(disarm, ARM_TIMEOUT_MS)
-        }
-        renderModeChips()
-    }
-
-    /** Called when the ESP32 reports which mode is actually active. */
-    private fun showDriveMode(mode: String) {
-        activeMode = mode
-        armedMode = null                         // confirmed — clear any arming
-        armHandler.removeCallbacks(disarm)
-        renderModeChips()
-    }
-
-    private fun renderModeChips() {
-        val chips = listOf(
-            "ECO"    to btnModeEco,
-            "NORMAL" to btnModeNormal,
-            "SPORT"  to btnModeSport
-        )
-        for ((name, chip) in chips) {
-            when {
-                name == armedMode -> {           // awaiting confirmation
-                    chip.setBackgroundResource(R.drawable.mode_chip_armed)
-                    chip.setTextColor(accentAmber)
-                    chip.text = "$name ?"
-                }
-                name.equals(activeMode, ignoreCase = true) -> {
-                    // Active chip inverts: pale fill + near-black text, so it
-                    // reads instantly rather than relying on colour alone.
-                    chip.setBackgroundResource(R.drawable.mode_chip_selected)
-                    chip.setTextColor(chipOnText)
-                    chip.text = name
-                }
-                else -> {
-                    chip.setBackgroundResource(R.drawable.mode_chip_idle)
-                    chip.setTextColor(labelText)
-                    chip.text = name
-                }
-            }
-        }
-    }
-
-    /** "1h 24m" with the h/m units shrunk to 38%, matching the other stats. */
-    private fun sessionText(mins: Int): CharSequence {
-        val s = "%dh %02dm".format(mins / 60, mins % 60)
-        return SpannableStringBuilder(s).apply {
-            val hPos = s.indexOf('h')
-            setSpan(RelativeSizeSpan(0.38f), hPos, hPos + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            setSpan(RelativeSizeSpan(0.38f), s.length - 1, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-    }
-
     /** Resolves a MAC address to a BluetoothDevice, null-safe if BT is unavailable. */
     private fun remoteDevice(addr: String): android.bluetooth.BluetoothDevice? =
         try {
@@ -650,25 +755,4 @@ class DashboardActivity : AppCompatActivity() {
         } catch (_: IllegalArgumentException) {
             null   // malformed address
         }
-
-    // ══════════════════════════════════════════════════════════════════════
-    //  Theme
-    // ══════════════════════════════════════════════════════════════════════
-
-    private fun applyTheme() {
-        findViewById<View>(R.id.rootLayout).setBackgroundColor(rootBg)
-        panels.forEach  { it.setBackgroundResource(R.drawable.tile_background_dark) }
-        labels.forEach  { it.setTextColor(labelText) }
-
-        // Per-stat accents (same earthy palette, one hue per data point)
-        tvStatRangeVal.setTextColor(accentTeal)
-        tvStatEffVal.setTextColor(accentAmber)
-        tvStatDistVal.setTextColor(accentBlue)
-        tvStatSpeedVal.setTextColor(valueText)   // white anchor
-        tvSessionTime.setTextColor(accentOlive)
-        tvElevCur.setTextColor(accentClay)
-
-        findViewById<TextView>(R.id.btnResetTrip).setTextColor(labelText)
-        findViewById<TextView>(R.id.btnSettings).setTextColor(labelText)
-    }
 }

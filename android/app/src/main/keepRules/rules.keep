@@ -11,11 +11,12 @@
 #   public *;
 #}
 
-# MPAndroidChart — reflection-based renderer/animator internals
--keep class com.github.mikephil.charting.** { *; }
--dontwarn com.github.mikephil.charting.**
-
 # Custom views inflated from XML by class name
--keep class com.landroverdash.app.BatteryCircleView { *; }
+-keep class com.landroverdash.app.MeterBar { *; }
+-keep class com.landroverdash.app.PowerBandView { *; }
+-keep class com.landroverdash.app.EfficiencyScaleView { *; }
+-keep class com.landroverdash.app.EnergyBarsView { *; }
+-keep class com.landroverdash.app.ElevationProfileView { *; }
+-keep class com.landroverdash.app.CellBarsView { *; }
 
 # Room entities/DAOs ship their own consumer rules; nothing extra needed.

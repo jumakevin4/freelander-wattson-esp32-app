@@ -26,10 +26,29 @@ interface TripDao {
     @Query("SELECT COALESCE(SUM(durationMin), 0) FROM trip_sessions")
     fun totalDurationMin(): Flow<Int>
 
-    @Query("SELECT COALESCE(AVG(avgEfficiencyWhPerKm), 0) FROM trip_sessions")
+    /**
+     * Wh/km over all saved trips: total energy ÷ total distance.
+     *
+     * This was AVG(avgEfficiencyWhPerKm), the plain mean of every trip's own
+     * figure. A 1 km roll down the hill counted as much as a 50 km drive, and
+     * a trip saved with no energy measured (0 Wh/km) pulled the mean down, so
+     * "your average" read far better than the car really does: on the history
+     * this replaced, 2,136 km on 371 kWh is 5.8 km/kWh, but it showed 7.0.
+     * Trips with no energy recorded are left out of both totals.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(energyKwh) * 1000.0 / NULLIF(SUM(distanceKm), 0), 0)
+        FROM trip_sessions WHERE energyKwh != 0 AND distanceKm > 0""")
     fun avgEfficiencyWhPerKm(): Flow<Float>
 
-    @Query("SELECT COALESCE(AVG(avgSpeedKmh), 0) FROM trip_sessions")
+    /**
+     * Average moving speed over all trips: total distance ÷ total moving time,
+     * where each trip's moving time is its distance ÷ its own average speed.
+     * Was AVG(avgSpeedKmh), which weighted a 2-minute hop like a 2-hour drive.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(distanceKm) / NULLIF(SUM(distanceKm / avgSpeedKmh), 0), 0)
+        FROM trip_sessions WHERE avgSpeedKmh > 0 AND distanceKm > 0""")
     fun avgSpeedKmh(): Flow<Float>
 
     @Query("SELECT * FROM trip_sessions WHERE startTime >= :since ORDER BY startTime ASC")

@@ -1,245 +1,244 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Vehicle — eight live readings, updating with every packet, and the history
+    of all saved trips underneath. The history card takes whatever height is
+    left, with its heading and Reset button at the top and the totals at the
+    bottom, so the screen is filled at any font size. Settings opens from the
+    button at the top right (it has no rail item).
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/detailsRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="#000000"
-    android:padding="12dp">
+    android:background="@color/bg"
+    android:orientation="horizontal">
 
-    <!-- No header row: the page title said nothing the panel headings don't,
-         and navigation back is the system gesture. -->
+    <include layout="@layout/view_nav_rail" />
 
-    <!-- ════════════════════════════════════════════════
-         SECTION 1 — Live Vehicle Data (updates with every packet)
-         ════════════════════════════════════════════════ -->
     <LinearLayout
-        android:id="@+id/panelCurrent"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:background="@drawable/tile_background_dark"
-        android:padding="16dp"
-        android:layout_marginBottom="12dp">
-
-        <TextView
-            android:id="@+id/tvCurrentTitle"
-            android:text="Live Vehicle Data"
-            android:textColor="#7FC49A"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:gravity="center"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp" />
-
-        <!-- Two rows of three, not one row of six. These use the Long Term
-             panel's sizes (32sp values, 14sp labels), and at a sixth of the
-             width a reading like "309 V" would wrap to three lines and swamp
-             the row. Values carry no maxLines on purpose: with maxLines="1"
-             and no ellipsize, text too wide to fit renders as nothing at all.
-             Labels are pinned to two lines so value baselines align. -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                <TextView android:id="@+id/lblVolt" android:text="HV Battery"
-                    android:textColor="#7FC49A" android:textSize="14sp" android:textStyle="bold"
-                    android:gravity="center" android:minLines="2" android:maxLines="2"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-                <TextView android:id="@+id/tvVolt" android:text="-- V"
-                    android:textColor="#FFFFFF" android:textSize="32sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-            </LinearLayout>
-
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                <TextView android:id="@+id/lblUsedEnergy" android:text="Used Energy"
-                    android:textColor="#7FC49A" android:textSize="14sp" android:textStyle="bold"
-                    android:gravity="center" android:minLines="2" android:maxLines="2"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-                <TextView android:id="@+id/tvUsedEnergy" android:text="-- kWh"
-                    android:textColor="#FFFFFF" android:textSize="32sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-            </LinearLayout>
-
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                <TextView android:id="@+id/lblBattTemp" android:text="Inverter"
-                    android:textColor="#7FC49A" android:textSize="14sp" android:textStyle="bold"
-                    android:gravity="center" android:minLines="2" android:maxLines="2"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-                <TextView android:id="@+id/tvBattTemp" android:text="-- °C"
-                    android:textColor="#FFFFFF" android:textSize="32sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-            </LinearLayout>
-
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:orientation="horizontal">
-
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                <TextView android:id="@+id/lblAux" android:text="LV Battery"
-                    android:textColor="#7FC49A" android:textSize="14sp" android:textStyle="bold"
-                    android:gravity="center" android:minLines="2" android:maxLines="2"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-                <TextView android:id="@+id/tvAux" android:text="-- V"
-                    android:textColor="#FFFFFF" android:textSize="32sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-            </LinearLayout>
-
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                <TextView android:id="@+id/lblPeakCurr" android:text="Peak"
-                    android:textColor="#7FC49A" android:textSize="14sp" android:textStyle="bold"
-                    android:gravity="center" android:minLines="2" android:maxLines="2"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-                <TextView android:id="@+id/tvPeakCurr" android:text="-- A"
-                    android:textColor="#FFFFFF" android:textSize="32sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-            </LinearLayout>
-
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                <TextView android:id="@+id/lblMotorTemp" android:text="Motor"
-                    android:textColor="#7FC49A" android:textSize="14sp" android:textStyle="bold"
-                    android:gravity="center" android:minLines="2" android:maxLines="2"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-                <TextView android:id="@+id/tvMotorTemp" android:text="-- °C"
-                    android:textColor="#FFFFFF" android:textSize="32sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-            </LinearLayout>
-
-        </LinearLayout>
-
-    </LinearLayout>
-
-    <!-- ════════════════════════════════════════════════
-         SECTION 2 — Long Term Trip Data
-         ════════════════════════════════════════════════ -->
-    <LinearLayout
-        android:id="@+id/panelLongTerm"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
         android:layout_weight="1"
         android:orientation="vertical"
-        android:gravity="center_horizontal"
-        android:background="@drawable/tile_background_dark"
-        android:padding="16dp">
+        android:paddingStart="24dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="16dp">
 
-        <TextView
-            android:id="@+id/tvHistoryTitle"
-            android:text="Long Term Trip Data"
-            android:textColor="#7FC49A"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:gravity="center"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp" />
-
-        <!-- Stats — 6 compact items in a single row -->
+        <!-- Header -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="52dp"
+            android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                <TextView android:id="@+id/ltlblDist" android:text="Distance"
-                    android:textColor="#7FC49A" android:textSize="14sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-                <TextView android:id="@+id/lttvDist" android:text="-- km"
-                    android:textColor="#FFFFFF" android:textSize="32sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
+            <TextView
+                style="@style/W.Title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:accessibilityHeading="true"
+                android:text="Vehicle" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <!-- A derate the readings back up (a temperature fault whose
+                 temperature stays high). Any other inverter error is only
+                 logged, under Settings → Inverter. -->
+            <LinearLayout
+                android:id="@+id/faultChip"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_status_chip_crit"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/ivFaultChip"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_warning"
+                    app:tint="@color/crit" />
+
+                <TextView
+                    android:id="@+id/tvFaultChip"
+                    style="@style/W.Text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:accessibilityLiveRegion="polite"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/crit"
+                    android:textSize="16sp" />
             </LinearLayout>
 
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                <TextView android:id="@+id/ltlblTime" android:text="Time"
-                    android:textColor="#7FC49A" android:textSize="14sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-                <TextView android:id="@+id/lttvTime" android:text="--"
-                    android:textColor="#FFFFFF" android:textSize="32sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-            </LinearLayout>
-
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                <TextView android:id="@+id/ltlblEnergy" android:text="Energy"
-                    android:textColor="#7FC49A" android:textSize="14sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-                <TextView android:id="@+id/lttvEnergy" android:text="-- kWh"
-                    android:textColor="#FFFFFF" android:textSize="32sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-            </LinearLayout>
-
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                <TextView android:id="@+id/ltlblEff" android:text="Efficiency"
-                    android:textColor="#7FC49A" android:textSize="14sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-                <TextView android:id="@+id/lttvEff" android:text="-- km/kWh"
-                    android:textColor="#FFFFFF" android:textSize="32sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-            </LinearLayout>
-
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
-                android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                <TextView android:id="@+id/ltlblAvgSpeed" android:text="Speed"
-                    android:textColor="#7FC49A" android:textSize="14sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-                <TextView android:id="@+id/lttvAvgSpeed" android:text="-- km/h"
-                    android:textColor="#FFFFFF" android:textSize="32sp" android:textStyle="bold"
-                    android:gravity="center"
-                    android:layout_width="match_parent" android:layout_height="wrap_content"/>
-            </LinearLayout>
-
+            <!-- Settings lives here now, not in the rail. Plain text button,
+                 no box, like Reset trip on Drive. -->
+            <TextView
+                android:id="@+id/btnSettings"
+                style="@style/W.Button.Ghost"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_marginStart="12dp"
+                android:drawableStart="@drawable/ic_settings"
+                android:text="Settings" />
         </LinearLayout>
 
-        <!-- Spacer pushes Delete to the very bottom of this panel -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
-
-        <!-- Delete all history — inside the Long Term panel, small, bottom -->
         <TextView
-            android:id="@+id/btnDeleteAll"
-            android:text="DELETE ALL HISTORY"
-            android:textColor="#8B1A1A"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.10"
-            android:gravity="center"
-            android:padding="6dp"
+            style="@style/W.Label.Small"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal" />
+            android:layout_marginTop="10dp"
+            android:text="Live" />
 
+        <!-- Live tiles, two rows of four. 136dp leaves room for a tile with a
+             headroom bar at the head unit's large font size. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="136dp"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <include
+                android:id="@+id/tileHv"
+                layout="@layout/item_vehicle_tile" />
+
+            <Space
+                android:layout_width="12dp"
+                android:layout_height="0dp" />
+
+            <include
+                android:id="@+id/tilePower"
+                layout="@layout/item_vehicle_tile" />
+
+            <Space
+                android:layout_width="12dp"
+                android:layout_height="0dp" />
+
+            <include
+                android:id="@+id/tileMotor"
+                layout="@layout/item_vehicle_tile" />
+
+            <Space
+                android:layout_width="12dp"
+                android:layout_height="0dp" />
+
+            <include
+                android:id="@+id/tileInverter"
+                layout="@layout/item_vehicle_tile" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="136dp"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <include
+                android:id="@+id/tileAux"
+                layout="@layout/item_vehicle_tile" />
+
+            <Space
+                android:layout_width="12dp"
+                android:layout_height="0dp" />
+
+            <include
+                android:id="@+id/tileUsed"
+                layout="@layout/item_vehicle_tile" />
+
+            <Space
+                android:layout_width="12dp"
+                android:layout_height="0dp" />
+
+            <include
+                android:id="@+id/tilePeak"
+                layout="@layout/item_vehicle_tile" />
+
+            <Space
+                android:layout_width="12dp"
+                android:layout_height="0dp" />
+
+            <include
+                android:id="@+id/tileConditions"
+                layout="@layout/item_vehicle_tile" />
+        </LinearLayout>
+
+        <!-- History of all saved trips -->
+        <LinearLayout
+            android:id="@+id/panelLongTerm"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="14dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingTop="16dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvHistoryTitle"
+                    style="@style/W.Label.Small"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="History · all trips" />
+
+                <TextView
+                    android:id="@+id/btnDeleteAll"
+                    style="@style/W.Button.Danger"
+                    android:layout_width="wrap_content"
+                    android:layout_height="56dp"
+                    android:drawableStart="@drawable/ic_reset"
+                    android:text="Reset all history" />
+            </LinearLayout>
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal">
+
+                <include
+                    android:id="@+id/histDist"
+                    layout="@layout/item_stat_cell" />
+
+                <include
+                    android:id="@+id/histTime"
+                    layout="@layout/item_stat_cell" />
+
+                <include
+                    android:id="@+id/histEnergy"
+                    layout="@layout/item_stat_cell" />
+
+                <include
+                    android:id="@+id/histEff"
+                    layout="@layout/item_stat_cell" />
+
+                <include
+                    android:id="@+id/histSpeed"
+                    layout="@layout/item_stat_cell" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
-
 </LinearLayout>

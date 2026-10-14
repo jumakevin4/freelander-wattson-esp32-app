@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Panel tile: pure black, no outline — panels are separated by spacing
-     alone so the app reads as one continuous black surface. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="#000000"/>
-    <corners android:radius="8dp"/>
-</shape>

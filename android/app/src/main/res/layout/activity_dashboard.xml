@@ -1,380 +1,710 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Dashboard — single pane, landscape.
-    Top bar : drive-mode selector (ECO/NORMAL/SPORT) spanning the width,
-              settings ⚙ at the far right.
-    Left    : 3×2 grid of stats (Range · Efficiency · Distance / Avg speed ·
-              Session · Elevation), values in the Land Rover display font with
-              per-stat accent colours. Tap Efficiency → energy chart page.
-    Right   : battery ring (SOC % + kWh inside), RESET TRIP pinned bottom.
+    Drive — power band layout, for the ATOTO A6PF (1024 × 600, landscape).
+
+    Order of importance: range (huge) → live power → efficiency against your
+    average → a strip with the trip and the car's health. Drive modes live on
+    their own screen; "Mode Normal" in the header shows the current one and
+    opens it.
+
+    The numbers (range, battery %, efficiency, power, the trip and health
+    readings) and the efficiency comparison line are sized in dp, not sp:
+    they are fitted to the 600 px height, and the head unit's font size
+    setting (set high on the A6PF) would otherwise push the trip and health
+    strip off the bottom. Labels and other text still follow it.
 -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/rootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000"
-    android:padding="10dp">
+    android:background="@color/bg"
+    android:orientation="horizontal">
+
+    <include layout="@layout/view_nav_rail" />
 
     <LinearLayout
-        android:id="@+id/panelMain"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="match_parent"
+        android:layout_weight="1"
         android:orientation="vertical"
-        android:background="@drawable/tile_background_dark">
+        android:paddingStart="24dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="14dp">
 
-        <!-- Link status. GONE when connected and idle, so it costs no space
-             in normal running; it exists so that "not connected" is
-             distinguishable from "parked" instead of both showing dashes. -->
-        <TextView
-            android:id="@+id/tvLinkStatus"
+        <!-- ══ Header: drive mode (or the link status while the link isn't
+             up), A/C, and an alert on the far right when one is active ══ -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text=""
-            android:visibility="gone"
-            android:textColor="#FFC14D"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:gravity="center"
-            android:paddingTop="6dp"
-            android:paddingBottom="2dp" />
+            android:layout_height="56dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <!-- ══════════ TOP BAR — drive modes + settings ══════════ -->
+            <!-- The current drive mode, styled like the old "Connected" line:
+                 plain text, no box. Opens Modes. Shown while the link is up;
+                 otherwise the link status below takes its place. -->
+            <LinearLayout
+                android:id="@+id/modePill"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_ripple_rounded"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <View
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:background="@drawable/dot"
+                    android:backgroundTint="@color/accent"
+                    android:importantForAccessibility="no" />
+
+                <TextView
+                    style="@style/W.Status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:text="Mode"
+                    android:textColor="@color/text3" />
+
+                <TextView
+                    android:id="@+id/tvModeName"
+                    style="@style/W.Status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:text="–" />
+            </LinearLayout>
+
+            <!-- Connecting, syncing, not connected …: in place of the mode. -->
+            <LinearLayout
+                android:id="@+id/linkStatusGroup"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:id="@+id/linkDot"
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:background="@drawable/dot"
+                    android:backgroundTint="@color/accent" />
+
+                <TextView
+                    android:id="@+id/tvLinkStatus"
+                    style="@style/W.Status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:ellipsize="end"
+                    android:maxWidth="440dp"
+                    android:text="Connecting…" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/acIndicator"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_marginStart="24dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <ImageView
+                    style="@style/W.Icon"
+                    android:src="@drawable/ic_snowflake"
+                    app:tint="@color/text2" />
+
+                <TextView
+                    style="@style/W.Status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="A/C on" />
+            </LinearLayout>
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <!-- While something needs attention: 12 V low, inverter fault,
+                 near a derate. Stays until it clears — these used to be
+                 toasts that vanished. -->
+            <LinearLayout
+                android:id="@+id/alertPill"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp"
+                android:layout_marginStart="16dp"
+                android:background="@drawable/bg_alert_warn"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingEnd="14dp"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/ivAlertIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_warning"
+                    app:tint="@color/warn" />
+
+                <TextView
+                    android:id="@+id/tvAlertTitle"
+                    style="@style/W.Text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:fontFamily="@font/archivo_bold"
+                    android:maxLines="1"
+                    android:textColor="@color/warn"
+                    android:textSize="18sp" />
+
+                <TextView
+                    android:id="@+id/tvAlertDetail"
+                    style="@style/W.Text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:maxLines="1"
+                    android:textColor="@color/warn_soft"
+                    android:textSize="16sp" />
+
+                <ImageView
+                    android:id="@+id/ivAlertChevron"
+                    style="@style/W.Icon"
+                    android:layout_marginStart="12dp"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/warn" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ══ Hero: range + battery, efficiency coaching ══ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingStart="14dp"
-            android:paddingEnd="14dp"
-            android:paddingTop="10dp">
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
 
-            <!-- Mode chips span all the space left of the settings button -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="horizontal">
+                android:orientation="vertical">
 
                 <TextView
-                    android:id="@+id/btnModeEco"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="ECO"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.12"
-                    android:gravity="center"
-                    android:paddingVertical="14dp"
-                    android:clickable="true"
-                    android:focusable="true" />
-
-                <TextView
-                    android:id="@+id/btnModeNormal"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="NORMAL"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.12"
-                    android:gravity="center"
-                    android:paddingVertical="14dp"
-                    android:layout_marginHorizontal="6dp"
-                    android:clickable="true"
-                    android:focusable="true" />
-
-                <TextView
-                    android:id="@+id/btnModeSport"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:text="SPORT"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.12"
-                    android:gravity="center"
-                    android:paddingVertical="14dp"
-                    android:clickable="true"
-                    android:focusable="true" />
-
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/btnSettings"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="⚙"
-                android:textSize="20sp"
-                android:textColor="#DDEEDF"
-                android:padding="6dp"
-                android:layout_marginStart="14dp" />
-
-        </LinearLayout>
-
-        <!-- ══════════ CONTENT — stat grid + battery ring ══════════ -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:orientation="horizontal">
-
-            <!-- LEFT — 3×2 stat grid -->
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="2.6"
-                android:orientation="vertical"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:paddingBottom="10dp">
-
-                <!-- Row 1: Range · Efficiency · Distance -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    android:orientation="horizontal">
-
-                    <LinearLayout
-                        android:layout_width="0dp" android:layout_height="match_parent"
-                        android:layout_weight="1" android:orientation="vertical"
-                        android:gravity="center">
-                        <TextView
-                            android:id="@+id/tvStatRangeVal"
-                            android:layout_width="match_parent" android:layout_height="76dp"
-                            android:text="-- km"
-                            android:fontFamily="@font/landroverweb_bold"
-                            android:textColor="#0F6B5E" android:gravity="center"
-                            android:maxLines="1"
-                            android:autoSizeTextType="uniform"
-                            android:autoSizeMinTextSize="36sp"
-                            android:autoSizeMaxTextSize="60sp" />
-                        <TextView
-                            android:id="@+id/tvStatRangeLbl"
-                            android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="RANGE"
-                            android:textColor="#2D6B40" android:textSize="12sp"
-                            android:textStyle="bold" android:letterSpacing="0.18"
-                            android:layout_marginTop="2dp" />
-                    </LinearLayout>
-
-                    <!-- Efficiency — tap to open the energy chart page -->
-                    <LinearLayout
-                        android:id="@+id/cellEfficiency"
-                        android:layout_width="0dp" android:layout_height="match_parent"
-                        android:layout_weight="1" android:orientation="vertical"
-                        android:gravity="center"
-                        android:clickable="true" android:focusable="true">
-                        <TextView
-                            android:id="@+id/tvStatEffVal"
-                            android:layout_width="match_parent" android:layout_height="76dp"
-                            android:text="-- km/kWh"
-                            android:fontFamily="@font/landroverweb_bold"
-                            android:textColor="#A66A00" android:gravity="center"
-                            android:maxLines="1"
-                            android:autoSizeTextType="uniform"
-                            android:autoSizeMinTextSize="36sp"
-                            android:autoSizeMaxTextSize="60sp" />
-                        <LinearLayout
-                            android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:orientation="horizontal" android:gravity="center_vertical"
-                            android:layout_marginTop="2dp">
-                            <TextView
-                                android:id="@+id/tvStatEffLbl"
-                                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="EFFICIENCY"
-                                android:textColor="#2D6B40" android:textSize="12sp"
-                                android:textStyle="bold" android:letterSpacing="0.18" />
-                            <TextView
-                                android:id="@+id/tvEffHint"
-                                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="ⓘ"
-                                android:textColor="#4A7A5A" android:textSize="12sp"
-                                android:layout_marginStart="6dp" />
-                        </LinearLayout>
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp" android:layout_height="match_parent"
-                        android:layout_weight="1" android:orientation="vertical"
-                        android:gravity="center">
-                        <TextView
-                            android:id="@+id/tvStatDistVal"
-                            android:layout_width="match_parent" android:layout_height="76dp"
-                            android:text="0.0 km"
-                            android:fontFamily="@font/landroverweb_bold"
-                            android:textColor="#2F5D8A" android:gravity="center"
-                            android:maxLines="1"
-                            android:autoSizeTextType="uniform"
-                            android:autoSizeMinTextSize="36sp"
-                            android:autoSizeMaxTextSize="60sp" />
-                        <TextView
-                            android:id="@+id/tvStatDistLbl"
-                            android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="DISTANCE"
-                            android:textColor="#2D6B40" android:textSize="12sp"
-                            android:textStyle="bold" android:letterSpacing="0.18"
-                            android:layout_marginTop="2dp" />
-                    </LinearLayout>
-
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="#286AAA7A"
-                    android:layout_marginVertical="4dp" />
-
-                <!-- Row 2: Avg speed · Session · Elevation -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    android:orientation="horizontal">
-
-                    <LinearLayout
-                        android:layout_width="0dp" android:layout_height="match_parent"
-                        android:layout_weight="1" android:orientation="vertical"
-                        android:gravity="center">
-                        <TextView
-                            android:id="@+id/tvStatSpeedVal"
-                            android:layout_width="match_parent" android:layout_height="76dp"
-                            android:text="-- km/h"
-                            android:fontFamily="@font/landroverweb_bold"
-                            android:textColor="#1A4A2A" android:gravity="center"
-                            android:maxLines="1"
-                            android:autoSizeTextType="uniform"
-                            android:autoSizeMinTextSize="36sp"
-                            android:autoSizeMaxTextSize="60sp" />
-                        <TextView
-                            android:id="@+id/tvStatSpeedLbl"
-                            android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="AVG SPEED"
-                            android:textColor="#2D6B40" android:textSize="12sp"
-                            android:textStyle="bold" android:letterSpacing="0.18"
-                            android:layout_marginTop="2dp" />
-                    </LinearLayout>
-
-                    <!-- Session — tap to open trip data / long-term history -->
-                    <LinearLayout
-                        android:id="@+id/cellSession"
-                        android:layout_width="0dp" android:layout_height="match_parent"
-                        android:layout_weight="1" android:orientation="vertical"
-                        android:gravity="center"
-                        android:clickable="true" android:focusable="true">
-                        <TextView
-                            android:id="@+id/tvSessionTime"
-                            android:layout_width="match_parent" android:layout_height="76dp"
-                            android:text="0h 00m"
-                            android:fontFamily="@font/landroverweb_bold"
-                            android:textColor="#5E5A2F" android:gravity="center"
-                            android:maxLines="1"
-                            android:autoSizeTextType="uniform"
-                            android:autoSizeMinTextSize="36sp"
-                            android:autoSizeMaxTextSize="60sp" />
-                        <LinearLayout
-                            android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:orientation="horizontal" android:gravity="center_vertical"
-                            android:layout_marginTop="2dp">
-                            <TextView
-                                android:id="@+id/tvSessionLbl"
-                                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="SESSION"
-                                android:textColor="#2D6B40" android:textSize="12sp"
-                                android:textStyle="bold" android:letterSpacing="0.18" />
-                            <TextView
-                                android:id="@+id/tvSessionHint"
-                                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="ⓘ"
-                                android:textColor="#4A7A5A" android:textSize="12sp"
-                                android:layout_marginStart="6dp" />
-                        </LinearLayout>
-                    </LinearLayout>
-
-                    <!-- Elevation — tap to open the elevation profile -->
-                    <LinearLayout
-                        android:id="@+id/rowElevation"
-                        android:layout_width="0dp" android:layout_height="match_parent"
-                        android:layout_weight="1" android:orientation="vertical"
-                        android:gravity="center"
-                        android:clickable="true" android:focusable="true">
-                        <TextView
-                            android:id="@+id/tvElevCur"
-                            android:layout_width="match_parent" android:layout_height="76dp"
-                            android:text="-- m"
-                            android:fontFamily="@font/landroverweb_bold"
-                            android:textColor="#8A4A2F" android:gravity="center"
-                            android:maxLines="1"
-                            android:autoSizeTextType="uniform"
-                            android:autoSizeMinTextSize="36sp"
-                            android:autoSizeMaxTextSize="60sp" />
-                        <LinearLayout
-                            android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:orientation="horizontal" android:gravity="center_vertical"
-                            android:layout_marginTop="2dp">
-                            <TextView
-                                android:id="@+id/tvElevTitle"
-                                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="ELEVATION"
-                                android:textColor="#2D6B40" android:textSize="12sp"
-                                android:textStyle="bold" android:letterSpacing="0.18" />
-                            <TextView
-                                android:id="@+id/tvElevHint"
-                                android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                android:text="ⓘ"
-                                android:textColor="#4A7A5A" android:textSize="12sp"
-                                android:layout_marginStart="6dp" />
-                        </LinearLayout>
-                    </LinearLayout>
-
-                </LinearLayout>
-
-            </LinearLayout>
-
-            <!-- RIGHT — battery ring + reset -->
-            <LinearLayout
-                android:id="@+id/panelSession"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1.1"
-                android:orientation="vertical"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
-                android:paddingBottom="10dp">
-
-                <FrameLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    android:paddingTop="28dp">
-
-                    <com.landroverdash.app.BatteryCircleView
-                        android:id="@+id/batteryCircle"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:layout_gravity="center" />
-
-                </FrameLayout>
-
-                <TextView
-                    android:id="@+id/btnResetTrip"
+                    style="@style/W.Label"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="end"
-                    android:text="RESET TRIP"
-                    android:textColor="#2D6B40"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.12"
-                    android:gravity="end"
-                    android:padding="6dp"
-                    android:layout_marginTop="6dp" />
+                    android:text="Range" />
 
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvRangeVal"
+                        style="@style/W.Hero"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="–"
+                        android:textSize="112dp"
+                        tools:ignore="SpUsage" />
+
+                    <TextView
+                        style="@style/W.Unit"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:text="km"
+                        android:textSize="30dp"
+                        tools:ignore="SpUsage" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <com.landroverdash.app.MeterBar
+                        android:id="@+id/socBar"
+                        android:layout_width="0dp"
+                        android:layout_height="14dp"
+                        android:layout_weight="1" />
+
+                    <TextView
+                        android:id="@+id/tvSoc"
+                        style="@style/W.BigValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:text="–"
+                        android:textSize="28dp"
+                        tools:ignore="SpUsage" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvRangeBasis"
+                    style="@style/W.Body.Muted"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:maxLines="1"
+                    android:text="Waiting for driving data" />
             </LinearLayout>
 
+            <LinearLayout
+                android:id="@+id/cardEfficiency"
+                android:layout_width="300dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="32dp"
+                android:background="@drawable/bg_card_pressable"
+                android:clickable="true"
+                android:focusable="true"
+                android:orientation="vertical"
+                android:paddingStart="20dp"
+                android:paddingTop="18dp"
+                android:paddingEnd="20dp"
+                android:paddingBottom="14dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/W.Label.Small"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Efficiency · trip" />
+
+                    <ImageView
+                        style="@style/W.Icon"
+                        android:src="@drawable/ic_chevron_right"
+                        app:tint="@color/text3" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvEffVal"
+                        style="@style/W.BigValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="–"
+                        android:textSize="54dp"
+                        tools:ignore="SpUsage" />
+
+                    <TextView
+                        style="@style/W.Unit"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="km/kWh"
+                        android:textSize="18dp"
+                        tools:ignore="SpUsage" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:id="@+id/ivEffTrend"
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_arrow_up"
+                        app:tint="@color/accent" />
+
+                    <TextView
+                        android:id="@+id/tvEffDelta"
+                        style="@style/W.Body"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="No average yet"
+                        android:textSize="16dp"
+                        tools:ignore="SpUsage" />
+                </LinearLayout>
+
+                <com.landroverdash.app.EfficiencyScaleView
+                    android:id="@+id/effScale"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp" />
+            </LinearLayout>
         </LinearLayout>
 
-    </LinearLayout>
+        <!-- ══ Live power ══ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal">
 
-</FrameLayout>
+            <TextView
+                style="@style/W.Label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Power" />
+
+            <TextView
+                android:id="@+id/tvPowerState"
+                style="@style/W.Status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text="" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/tvPowerVal"
+                style="@style/W.BigValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="–"
+                android:textSize="42dp"
+                        tools:ignore="SpUsage" />
+
+            <TextView
+                style="@style/W.Unit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="kW"
+                android:textSize="18dp"
+                        tools:ignore="SpUsage" />
+        </LinearLayout>
+
+        <com.landroverdash.app.PowerBandView
+            android:id="@+id/powerBand"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" />
+
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- ══ Trip + health strip ══ -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/line" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="8dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.12"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/W.Label"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Trip" />
+
+                    <TextView
+                        android:id="@+id/btnResetTrip"
+                        style="@style/W.Button.Ghost"
+                        android:layout_width="wrap_content"
+                        android:layout_height="56dp"
+                        android:drawableStart="@drawable/ic_reset"
+                        android:text="Reset trip" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            style="@style/W.StatLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Distance" />
+                        <TextView
+                            android:id="@+id/tvTripDist"
+                            style="@style/W.StatValue.Fit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="–" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            style="@style/W.StatLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Time" />
+                        <TextView
+                            android:id="@+id/tvTripTime"
+                            style="@style/W.StatValue.Fit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="–" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            style="@style/W.StatLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Avg speed" />
+                        <TextView
+                            android:id="@+id/tvTripSpeed"
+                            style="@style/W.StatValue.Fit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="–" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/statElevation"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_ripple_rounded"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:orientation="vertical">
+                        <TextView
+                            style="@style/W.StatLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Elevation" />
+                        <TextView
+                            android:id="@+id/tvTripElev"
+                            style="@style/W.StatValue.Fit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="–" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:background="@color/line" />
+
+            <LinearLayout
+                android:id="@+id/healthGroup"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_ripple_rounded"
+                android:clickable="true"
+                android:focusable="true"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/W.Label"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Health" />
+
+                    <ImageView
+                        android:id="@+id/ivHealthIcon"
+                        style="@style/W.Icon"
+                        android:src="@drawable/ic_check"
+                        app:tint="@color/accent" />
+
+                    <TextView
+                        android:id="@+id/tvHealthStatus"
+                        style="@style/W.Status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="Waiting for data"
+                        android:textSize="16sp" />
+
+                    <ImageView
+                        style="@style/W.Icon"
+                        android:layout_marginStart="8dp"
+                        android:src="@drawable/ic_chevron_right"
+                        app:tint="@color/text3" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:id="@+id/tvMotorLabel"
+                            style="@style/W.StatLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Motor" />
+                        <TextView
+                            android:id="@+id/tvMotorTemp"
+                            style="@style/W.StatValue.Fit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="–" />
+                        <com.landroverdash.app.MeterBar
+                            android:id="@+id/motorBar"
+                            android:layout_width="match_parent"
+                            android:layout_height="4dp"
+                            android:layout_marginTop="6dp"
+                            app:meterFillColor="@color/text2"
+                            app:meterTrackColor="@color/line" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:id="@+id/tvInvLabel"
+                            style="@style/W.StatLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Inverter" />
+                        <TextView
+                            android:id="@+id/tvInvTemp"
+                            style="@style/W.StatValue.Fit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="–" />
+                        <com.landroverdash.app.MeterBar
+                            android:id="@+id/invBar"
+                            android:layout_width="match_parent"
+                            android:layout_height="4dp"
+                            android:layout_marginTop="6dp"
+                            app:meterFillColor="@color/text2"
+                            app:meterTrackColor="@color/line" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:id="@+id/tv12vLabel"
+                            style="@style/W.StatLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="12 V" />
+                        <TextView
+                            android:id="@+id/tv12v"
+                            style="@style/W.StatValue.Fit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="–" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:id="@+id/tvFaultsLabel"
+                            style="@style/W.StatLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Faults" />
+                        <TextView
+                            android:id="@+id/tvFaults"
+                            style="@style/W.StatValue.Fit"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:ellipsize="end"
+                            android:text="–" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

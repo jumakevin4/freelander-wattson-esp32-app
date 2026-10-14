@@ -1,160 +1,155 @@
 package com.landroverdash.app
 
-import android.content.Context
-import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.view.View
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
-import com.github.mikephil.charting.charts.LineChart
-import com.github.mikephil.charting.components.AxisBase
-import com.github.mikephil.charting.components.XAxis
-import com.github.mikephil.charting.data.Entry
-import com.github.mikephil.charting.data.LineData
-import com.github.mikephil.charting.data.LineDataSet
-import com.github.mikephil.charting.formatter.ValueFormatter
-import java.util.Calendar
+import androidx.core.content.res.ResourcesCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
+import java.util.Locale
+import kotlin.math.abs
 
 /**
- * Full-screen trip energy chart (Wh per 5-minute bucket), opened by tapping
- * the Efficiency tile on the dashboard. Receives a snapshot of the buckets
- * via Intent extras — reopen for fresh data.
+ * Energy — this trip's energy per bucket, plus efficiency and trip energy.
+ *
+ * Reads the process-wide [LiveTripData] rather than a snapshot passed in an
+ * Intent, so it can be opened from the rail on any screen and keeps updating
+ * while it is open. (The old page showed whatever the dashboard handed it and
+ * had to be reopened for fresh data.)
  */
-class EnergyChartActivity : AppCompatActivity() {
+class EnergyChartActivity : WattsonActivity() {
 
-    companion object {
-        const val EXTRA_TS       = "bucket_ts"   // LongArray  — bucket start times (epoch ms)
-        const val EXTRA_WH       = "bucket_wh"   // FloatArray — Wh per bucket
-        const val EXTRA_GRAN_MIN = "bucket_min"  // Int — minutes per bucket (adaptive)
-    }
-
-    // Same palette as ElevationActivity so the two pages read as a pair.
-    private val lineColour = Color.parseColor("#1A6B3A")
-
-    /**
-     * Fill graded by height, carrying over what the bar colours used to say:
-     * calm green at low draw, amber through the middle, clay at the peaks.
-     *
-     * The gradient is drawn across the chart's plot area, and the left axis is
-     * pinned to zero, so a band's colour tracks its Wh as a fraction of the
-     * trip maximum — the same rule the bars used. Alpha climbs with the colour
-     * so heavy stretches read as denser, not just differently coloured.
-     */
-    private fun energyFill() = GradientDrawable(
-        GradientDrawable.Orientation.BOTTOM_TOP,
-        intArrayOf(
-            Color.parseColor("#2644BB66"),   // low  — calm green, nearly transparent
-            Color.parseColor("#66FFC14D"),   // mid  — amber
-            Color.parseColor("#B3E8926B")    // high — clay, most opaque
-        )
-    )
+    private lateinit var rowRolling: StatRow
+    private lateinit var rowTrip: StatRow
+    private lateinit var rowAverage: StatRow
+    private lateinit var rowUsed: StatRow
+    private lateinit var rowRecovered: StatRow
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_energy_chart)
+        bindNavRail(Screen.ENERGY)
 
-        applyTheme()
+        val bars = findViewById<EnergyBarsView>(R.id.energyBars)
+        val tvUnit = findViewById<TextView>(R.id.tvBucketUnit)
+        val tvSubtitle = findViewById<TextView>(R.id.tvEnergySubtitle)
 
+        rowRolling   = StatRow.of(this, R.id.rowRolling, "Last 30 min")
+        rowTrip      = StatRow.of(this, R.id.rowTrip, "This trip")
+        rowAverage   = StatRow.of(this, R.id.rowAverage, "Your average")
+        rowUsed      = StatRow.of(this, R.id.rowUsed, "Used", "Net, measured")
+        rowRecovered = StatRow.of(this, R.id.rowRecovered, "Recovered")
+        rowRecovered.value.setTextColor(color(R.color.accent))
 
-        val ts = intent.getLongArrayExtra(EXTRA_TS) ?: LongArray(0)
-        val wh = intent.getFloatArrayExtra(EXTRA_WH) ?: FloatArray(0)
-        buildChart(ts, wh)
-    }
-
-    private fun buildChart(ts: LongArray, wh: FloatArray) {
-        val chart = findViewById<LineChart>(R.id.energyBarChart)
-
-        val textCol  = Color.WHITE
-        val labelCol = Color.parseColor("#DDEEDF")
-
-        chart.apply {
-            description.isEnabled = false
-            legend.isEnabled      = false
-            // Touch enabled to match the elevation page — a long trip makes
-            // many buckets, and pinch/pan is the only way to read them.
-            setTouchEnabled(true)
-            isDragEnabled = true
-            setScaleEnabled(true)
-            setPinchZoom(true)
-            setDrawGridBackground(false)
-            setDrawBorders(false)
-            setBackgroundColor(Color.TRANSPARENT)
-            setNoDataText("No energy data yet this trip")
-            setNoDataTextColor(labelCol)
-
-            xAxis.apply {
-                position    = XAxis.XAxisPosition.BOTTOM
-                setDrawAxisLine(false)
-                setDrawGridLines(false)
-                granularity = 1f
-                textColor   = textCol
-                textSize    = 18f
-                typeface    = Typeface.DEFAULT_BOLD
-                setLabelRotationAngle(0f)
-            }
-            axisLeft.apply {
-                setDrawAxisLine(false)
-                setDrawGridLines(false)
-                setDrawZeroLine(false)
-                textColor   = textCol
-                textSize    = 18f
-                typeface    = Typeface.DEFAULT_BOLD
-                axisMinimum = 0f
-                valueFormatter = object : ValueFormatter() {
-                    override fun getAxisLabel(value: Float, axis: AxisBase?): String =
-                        "%,d Wh".format(value.toInt())
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    LiveTripData.energyBuckets.collect { list ->
+                        bars.setBuckets(list)
+                        bars.contentDescription = describe(list)
+                    }
                 }
-            }
-            axisRight.isEnabled = false
-            extraBottomOffset   = 12f
-        }
-
-        if (wh.isEmpty()) { chart.clear(); chart.invalidate(); return }
-
-        // Single line like the elevation profile, but with the fill graded by
-        // height so heavy-draw stretches still stand out the way the bars did.
-        val entries = wh.mapIndexed { i, v -> Entry(i.toFloat(), v) }
-        val dataSet = LineDataSet(entries, "Energy").apply {
-            color     = lineColour
-            lineWidth = 2.5f
-            setDrawCircles(false)
-            setDrawValues(false)
-            mode      = LineDataSet.Mode.CUBIC_BEZIER
-            setDrawFilled(true)
-            // fillDrawable overrides fillColor, and fillAlpha is ignored once
-            // it is set — the alpha lives in the gradient's own colours.
-            fillDrawable = energyFill()
-            // Touch is on for pinch/pan, so suppress the tap crosshair —
-            // there are no per-point values worth highlighting here.
-            isHighlightEnabled = false
-        }
-
-        chart.xAxis.apply {
-            labelCount = entries.size.coerceAtMost(6)
-            valueFormatter = object : ValueFormatter() {
-                override fun getAxisLabel(value: Float, axis: AxisBase?): String {
-                    val idx = value.toInt()
-                    if (idx < 0 || idx >= ts.size) return ""
-                    val cal = Calendar.getInstance()
-                    cal.timeInMillis = ts[idx]
-                    return "%02d:%02d".format(
-                        cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
+                launch {
+                    LiveTripData.bucketMinutes.collect { g -> tvUnit.text = unitLabel(g) }
+                }
+                launch {
+                    LiveTripData.tripTimeMin.collect { m -> tvSubtitle.text = "This trip · ${duration(m)}" }
+                }
+                launch {
+                    combine(LiveTripData.rollingEffWhPerKm, LiveTripData.tripEffWhPerKm,
+                        LiveTripData.lifetimeEffWhPerKm) { r, t, l -> Triple(r, t, l) }
+                        .collect { (r, t, l) -> renderEfficiency(r, t, l) }
+                }
+                launch {
+                    combine(LiveVehicleData.usedKwh, LiveTripData.regenKwh) { u, g -> u to g }
+                        .collect { (used, regen) -> renderEnergy(used, regen) }
                 }
             }
         }
-        chart.data = LineData(dataSet)
-        chart.invalidate()
     }
 
-    private fun applyTheme() {
-        val rootBg   = Color.parseColor("#000000")
-        // Same green as the Settings section headings.
-        val titleCol = Color.parseColor("#7FC49A")
-        val labelCol = Color.parseColor("#DDEEDF")
+    private fun kmPerKwh(whPerKm: Float) = if (whPerKm > 0f) 1000f / whPerKm else 0f
 
-        findViewById<View>(R.id.energyRoot).setBackgroundColor(rootBg)
-        findViewById<TextView>(R.id.tvEnergyTitle).setTextColor(titleCol)
+    private fun renderEfficiency(rollingWh: Float, tripWh: Float, lifetimeWh: Float) {
+        val rolling = kmPerKwh(rollingWh)
+        val trip = kmPerKwh(tripWh)
+        val avg = kmPerKwh(lifetimeWh)
+
+        rowRolling.value.text = Fmt.valueUnit(this, Fmt.one(rolling), if (rolling > 0f) "km/kWh" else "", unitSp = 14)
+        // Unlike the trip and average figures this one doesn't subtract regen
+        // (the range projection is deliberately conservative), so say so.
+        rowRolling.sub(if (rolling > 0f) "Range uses this; regen not counted"
+                       else "After a few minutes of driving", color(R.color.text3))
+
+        rowTrip.value.text = Fmt.valueUnit(this, Fmt.one(trip), if (trip > 0f) "km/kWh" else "", unitSp = 14)
+        val semibold: Typeface? = ResourcesCompat.getFont(this, R.font.archivo_semibold)
+        val regular: Typeface? = ResourcesCompat.getFont(this, R.font.archivo_regular)
+        when {
+            trip <= 0f -> { rowTrip.sub("Measuring…", color(R.color.text3)); rowTrip.sub.typeface = regular }
+            avg <= 0f -> { rowTrip.sub("Nothing to compare yet", color(R.color.text3)); rowTrip.sub.typeface = regular }
+            else -> {
+                val pct = (trip / avg - 1f) * 100f
+                when {
+                    abs(pct) < 1f -> {
+                        rowTrip.sub("Same as your average", color(R.color.text2))
+                        rowTrip.sub.typeface = regular
+                    }
+                    pct > 0f -> {
+                        rowTrip.sub(String.format(Locale.US, "%.0f%% above average", pct), color(R.color.accent))
+                        rowTrip.sub.typeface = semibold
+                    }
+                    else -> {
+                        rowTrip.sub(String.format(Locale.US, "%.0f%% below average", -pct), color(R.color.text2))
+                        rowTrip.sub.typeface = semibold
+                    }
+                }
+            }
+        }
+
+        rowAverage.value.text = Fmt.valueUnit(this, Fmt.one(avg), if (avg > 0f) "km/kWh" else "", unitSp = 14)
+        rowAverage.sub(if (avg > 0f) "All saved trips" else "No saved trips yet", color(R.color.text3))
+    }
+
+    private fun renderEnergy(usedKwh: Float, regenKwh: Float) {
+        val known = usedKwh != 0f || regenKwh > 0f
+        rowUsed.value.text = if (known)
+            Fmt.valueUnit(this, minusSign(String.format(Locale.US, "%.1f", usedKwh)), "kWh", unitSp = 14)
+        else Fmt.NONE
+        rowRecovered.value.text = if (known)
+            Fmt.valueUnit(this, String.format(Locale.US, "%.1f", regenKwh), "kWh", unitSp = 14)
+        else Fmt.NONE
+        // Gross draw = net + what regen put back.
+        val draw = usedKwh + regenKwh
+        rowRecovered.sub(
+            if (draw > 0.05f && regenKwh > 0f)
+                String.format(Locale.US, "By regen · %.0f%% of draw", regenKwh / draw * 100f)
+            else "By regen")
+    }
+
+    private fun minusSign(s: String) = if (s.startsWith("-")) "−" + s.substring(1) else s
+
+    private fun unitLabel(minutes: Int): String = when {
+        minutes <= 1 -> "Wh per minute"
+        minutes < 60 -> "Wh per $minutes minutes"
+        minutes == 60 -> "Wh per hour"
+        else -> "Wh per ${minutes / 60} hours"
+    }
+
+    private fun duration(mins: Int): String = when {
+        mins < 1 -> "under a minute"
+        mins < 60 -> "$mins min"
+        else -> "${mins / 60} h ${mins % 60} min"
+    }
+
+    private fun describe(list: List<EnergyBucket>): String {
+        if (list.isEmpty()) return "No energy data yet this trip"
+        val peak = list.maxOf { it.wh }
+        val regen = list.sumOf { it.regenWh.toDouble() }
+        return String.format(Locale.US,
+            "Energy per bucket this trip: %d buckets, peak %.0f Wh, %.0f Wh recovered by regen",
+            list.size, peak, regen)
     }
 }

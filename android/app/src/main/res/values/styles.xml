@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Wattson type and control styles. Sizes are in dp/sp for the ATOTO A6PF's
+    1024 × 600 screen at 160 dpi, where 1 dp is 1 pixel.
+    Archivo (normal width) for text, Archivo Expanded for the big numbers,
+    IBM Plex Mono for codes and raw values. Tabular figures everywhere so
+    numbers that update twice a second don't jitter.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="W.Text" parent="">
+        <item name="android:fontFamily">@font/archivo_regular</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+    </style>
+
+    <!-- RANGE, POWER, TRIP … -->
+    <style name="W.Label" parent="W.Text">
+        <item name="android:fontFamily">@font/archivo_semibold</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:letterSpacing">0.14</item>
+        <item name="android:textColor">@color/text3</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="W.Label.Small" parent="W.Label">
+        <item name="android:textSize">15sp</item>
+    </style>
+
+    <!-- Small grey caption above a value: "Distance", "Motor" … -->
+    <style name="W.StatLabel" parent="W.Text">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/text3</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="W.StatValue" parent="W.Text">
+        <item name="android:fontFamily">@font/archivo_semibold</item>
+        <item name="android:textSize">30sp</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <!-- Trip and health readings on Drive. In dp, not sp, so the head unit's
+         large font setting can't push the strip off the bottom of the screen.
+         A reading too long for its column (a named fault, say) shrinks to
+         fit; minHeight holds the box at full-size height so the text grows
+         back once it's short again. -->
+    <style name="W.StatValue.Fit" tools:ignore="SpUsage">
+        <item name="android:textSize">30dp</item>
+        <item name="android:minHeight">34dp</item>
+        <item name="android:gravity">center_vertical|start</item>
+        <item name="android:autoSizeTextType">uniform</item>
+        <item name="android:autoSizeMinTextSize">14dp</item>
+        <item name="android:autoSizeMaxTextSize">30dp</item>
+        <item name="android:autoSizeStepGranularity">1dp</item>
+    </style>
+
+    <style name="W.Body" parent="W.Text">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/text2</item>
+        <item name="android:lineSpacingMultiplier">1.2</item>
+    </style>
+
+    <style name="W.Body.Muted" parent="W.Body">
+        <item name="android:textColor">@color/text3</item>
+    </style>
+
+    <style name="W.Small" parent="W.Text">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/text3</item>
+        <item name="android:lineSpacingMultiplier">1.2</item>
+    </style>
+
+    <style name="W.Status" parent="W.Text">
+        <item name="android:textSize">17sp</item>
+        <item name="android:textColor">@color/text2</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="W.Title" parent="W.Text">
+        <item name="android:fontFamily">@font/archivo_expanded_semibold</item>
+        <item name="android:textSize">30sp</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="W.SectionTitle" parent="W.Text">
+        <item name="android:fontFamily">@font/archivo_expanded_semibold</item>
+        <item name="android:textSize">22sp</item>
+    </style>
+
+    <style name="W.Hero" parent="W.Text">
+        <item name="android:fontFamily">@font/archivo_expanded_semibold</item>
+        <item name="android:textSize">116sp</item>
+        <item name="android:letterSpacing">-0.03</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="W.BigValue" parent="W.Text">
+        <item name="android:fontFamily">@font/archivo_expanded_semibold</item>
+        <item name="android:letterSpacing">-0.02</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="W.Unit" parent="W.Text">
+        <item name="android:fontFamily">@font/archivo_medium</item>
+        <item name="android:textColor">@color/text2</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="W.Mono" parent="W.Text">
+        <item name="android:fontFamily">@font/ibm_plex_mono_regular</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:lineSpacingMultiplier">1.35</item>
+    </style>
+
+    <!-- Buttons are TextViews, as before, so the Activities' findViewById<TextView>
+         calls keep working. 56 dp tall: about 8.5 mm on the 7-inch panel. -->
+    <style name="W.Button" parent="W.Text">
+        <item name="android:minHeight">56dp</item>
+        <item name="android:paddingStart">20dp</item>
+        <item name="android:paddingEnd">20dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:background">@drawable/bg_button_outline</item>
+        <item name="android:fontFamily">@font/archivo_semibold</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/text2</item>
+        <item name="android:drawablePadding">10dp</item>
+        <item name="android:drawableTint">@color/text2</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="W.Button.Light" parent="W.Button">
+        <item name="android:textColor">@color/text</item>
+        <item name="android:drawableTint">@color/text</item>
+    </style>
+
+    <style name="W.Button.Primary" parent="W.Button">
+        <item name="android:background">@drawable/bg_button_primary</item>
+        <item name="android:paddingStart">24dp</item>
+        <item name="android:paddingEnd">24dp</item>
+        <item name="android:fontFamily">@font/archivo_bold</item>
+        <item name="android:textSize">17sp</item>
+        <item name="android:textColor">@color/on_accent</item>
+        <item name="android:drawableTint">@color/on_accent</item>
+    </style>
+
+    <!-- A text action with no box: icon and label, with a press ripple.
+         "Reset trip" on Drive. -->
+    <style name="W.Button.Ghost" parent="W.Button">
+        <item name="android:background">@drawable/bg_ripple_rounded</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">12dp</item>
+    </style>
+
+    <style name="W.Button.Danger" parent="W.Button">
+        <item name="android:background">@drawable/bg_button_danger</item>
+        <item name="android:textColor">@color/crit</item>
+        <item name="android:drawableTint">@color/crit</item>
+    </style>
+
+    <style name="W.Link" parent="W.Text">
+        <item name="android:minHeight">48dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/accent</item>
+        <item name="android:background">@drawable/bg_ripple_rounded</item>
+        <item name="android:paddingStart">4dp</item>
+        <item name="android:paddingEnd">4dp</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <!-- Nav rail -->
+    <!-- Rail items: 80 dp squares stacked from the top (see view_nav_rail). -->
+    <style name="W.RailItem" parent="">
+        <item name="android:layout_width">80dp</item>
+        <item name="android:layout_height">80dp</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center</item>
+        <item name="android:background">@drawable/bg_rail_item</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <style name="W.RailIcon" parent="">
+        <item name="android:layout_width">28dp</item>
+        <item name="android:layout_height">28dp</item>
+        <item name="tint">@color/rail_icon</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+
+    <style name="W.RailLabel" parent="W.Text">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">6dp</item>
+        <item name="android:fontFamily">@font/archivo_semibold</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textColor">@color/rail_label</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <!-- Small inline icons (chevrons, status ticks) -->
+    <style name="W.Icon" parent="">
+        <item name="android:layout_width">20dp</item>
+        <item name="android:layout_height">20dp</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+
+    <!-- Card heading: EFFICIENCY, ENERGY · TRIP … -->
+    <style name="W.Label.Card" parent="W.Label">
+        <item name="android:textSize">14sp</item>
+    </style>
+
+    <!-- Label / value rows inside cards (Energy, Terrain, Vehicle history). -->
+    <style name="W.RowTitle" parent="W.Text">
+        <item name="android:textSize">17sp</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="W.RowSub" parent="W.Text">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/text3</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="W.RowValue" parent="W.Text">
+        <item name="android:fontFamily">@font/archivo_semibold</item>
+        <item name="android:textSize">26sp</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <!-- Header legends: "Used", "Regen", "Average" … -->
+    <style name="W.Legend" parent="W.Text">
+        <item name="android:textSize">15sp</item>
+        <item name="android:textColor">@color/text2</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <!-- ══ Settings ══ -->
+    <style name="W.H2" parent="W.Text">
+        <item name="android:fontFamily">@font/archivo_expanded_semibold</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:accessibilityHeading">true</item>
+    </style>
+
+    <style name="W.H3" parent="W.Text">
+        <item name="android:fontFamily">@font/archivo_semibold</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:accessibilityHeading">true</item>
+    </style>
+
+    <style name="W.FieldLabel" parent="W.Text">
+        <item name="android:textSize">15sp</item>
+        <item name="android:textColor">@color/text2</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <!-- The rounded box around an input and its unit. Takes the focused
+         state from the EditText inside so the outline turns accent. -->
+    <style name="W.InputBox" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">54dp</item>
+        <item name="android:layout_marginTop">6dp</item>
+        <item name="android:background">@drawable/bg_input</item>
+        <item name="android:addStatesFromChildren">true</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+    </style>
+
+    <style name="W.Input" parent="W.Text">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:background">@null</item>
+        <item name="android:fontFamily">@font/archivo_semibold</item>
+        <item name="android:textSize">21sp</item>
+        <item name="android:inputType">numberDecimal</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:selectAllOnFocus">true</item>
+    </style>
+
+    <style name="W.InputUnit" parent="W.Text">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/text3</item>
+        <item name="android:layout_marginStart">8dp</item>
+    </style>
+
+</resources>

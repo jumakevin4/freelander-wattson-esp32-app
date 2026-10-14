@@ -1,34 +1,132 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Connect — shown on first run, or after "Change Bluetooth device". The car
+    interface is listed first and stands out; everything else paired with the
+    head unit (phones, speakers, OBD dongles) is listed below it, quieter.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="#000000"
-    android:padding="16dp">
+    android:background="@color/bg"
+    android:orientation="horizontal"
+    android:paddingStart="56dp"
+    android:paddingTop="44dp"
+    android:paddingEnd="48dp"
+    android:paddingBottom="44dp">
 
-    <TextView
-        android:text="Wattson"
-        android:textColor="#00CC66"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp" />
-
-    <TextView
-        android:id="@+id/statusText"
-        android:text="Select a device"
-        android:textColor="#AAAAAA"
-        android:textSize="14sp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp" />
-
-    <ListView
-        android:id="@+id/deviceList"
-        android:layout_width="match_parent"
+    <!-- ══ Left: what to do ══ -->
+    <LinearLayout
+        android:layout_width="340dp"
         android:layout_height="match_parent"
-        android:dividerHeight="1dp"
-        android:divider="#333333" />
+        android:orientation="vertical">
 
+        <TextView
+            style="@style/W.Text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/archivo_expanded_bold"
+            android:letterSpacing="0.22"
+            android:text="WATTSON"
+            android:textSize="20sp" />
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <TextView
+            style="@style/W.Text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:accessibilityHeading="true"
+            android:fontFamily="@font/archivo_expanded_semibold"
+            android:letterSpacing="-0.02"
+            android:lineSpacingMultiplier="1.04"
+            android:text="Connect to your car"
+            android:textSize="46sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/statusDot"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_marginStart="-6dp"
+                android:background="@drawable/dot_halo" />
+
+            <TextView
+                android:id="@+id/statusText"
+                style="@style/W.Text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:accessibilityLiveRegion="polite"
+                android:lineSpacingMultiplier="1.2"
+                android:text="Looking for paired devices…"
+                android:textColor="@color/text2"
+                android:textSize="18sp" />
+        </LinearLayout>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/line" />
+
+        <TextView
+            style="@style/W.Text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:lineSpacingMultiplier="1.3"
+            android:text="Not listed? Pair Freelander EV in Android Bluetooth settings first, then come back here."
+            android:textColor="@color/text3"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/btnBluetoothSettings"
+            style="@style/W.Button.Light"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:layout_marginTop="14dp"
+            android:drawableStart="@drawable/ic_settings"
+            android:text="Open Bluetooth settings" />
+    </LinearLayout>
+
+    <!-- ══ Right: paired devices ══ -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="48dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <TextView
+            style="@style/W.Label.Small"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Paired devices" />
+
+        <ListView
+            android:id="@+id/deviceList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:divider="@android:color/transparent"
+            android:dividerHeight="10dp"
+            android:listSelector="@android:color/transparent"
+            android:overScrollMode="ifContentScrolls"
+            android:scrollbars="none" />
+    </LinearLayout>
 </LinearLayout>

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    One live reading on the Vehicle screen: icon and name, the value, and a
+    line underneath (optionally with a headroom bar above it). DetailsActivity
+    fills it in; include it with an android:id. A tile that opens another
+    screen shows the chevron.
+    The value shrinks to fit a long reading; minHeight (the 32sp line height,
+    in sp so it follows the font setting) keeps its box full height so it
+    grows back once the reading is short again. A long name shrinks a little
+    to fit too, with its line kept full height so the tiles stay level.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_weight="1"
+    android:background="@drawable/bg_tile"
+    android:orientation="vertical"
+    android:paddingStart="16dp"
+    android:paddingTop="14dp"
+    android:paddingEnd="16dp"
+    android:paddingBottom="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/ivTileIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:importantForAccessibility="no"
+            app:tint="@color/text2" />
+
+        <TextView
+            android:id="@+id/tvTileLabel"
+            style="@style/W.Text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:autoSizeMaxTextSize="15sp"
+            android:autoSizeMinTextSize="12sp"
+            android:autoSizeStepGranularity="1sp"
+            android:autoSizeTextType="uniform"
+            android:maxLines="1"
+            android:minHeight="17sp"
+            android:textColor="@color/text2"
+            android:textSize="15sp" />
+
+        <ImageView
+            android:id="@+id/ivTileChevron"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="4dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_chevron_right"
+            android:visibility="gone"
+            app:tint="@color/text3" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvTileValue"
+        style="@style/W.Text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:autoSizeMaxTextSize="32sp"
+        android:autoSizeMinTextSize="18sp"
+        android:autoSizeStepGranularity="1sp"
+        android:autoSizeTextType="uniform"
+        android:fontFamily="@font/archivo_semibold"
+        android:maxLines="1"
+        android:minHeight="36sp"
+        android:text="–"
+        android:textSize="32sp" />
+
+    <Space
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <com.landroverdash.app.MeterBar
+        android:id="@+id/tileBar"
+        android:layout_width="match_parent"
+        android:layout_height="4dp"
+        android:layout_marginBottom="6dp"
+        android:visibility="gone"
+        app:meterFillColor="@color/text2"
+        app:meterTrackColor="@color/line" />
+
+    <TextView
+        android:id="@+id/tvTileSub"
+        style="@style/W.Text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/text3"
+        android:textSize="14sp" />
+</LinearLayout>

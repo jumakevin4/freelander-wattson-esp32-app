@@ -1,52 +1,111 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Terrain — the trip's elevation profile, with the stretches where regen put
+    energy back drawn in the accent colour. Five numbers above it.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/elevRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="#000000"
-    android:padding="12dp">
+    android:background="@color/bg"
+    android:orientation="horizontal">
 
-    <!-- Header: back button + title (matches the Energy chart page) -->
+    <include layout="@layout/view_nav_rail" />
+
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="4dp">
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="12dp">
 
-        <!-- Back button removed in favour of the system back gesture, so the
-             invisible spacer that balanced it is gone too. -->
-        <TextView
-            android:id="@+id/tvElevChartTitle"
-            android:text="Trip Elevation"
-            android:textColor="#7FC49A"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:gravity="center"
-            android:layout_width="0dp"
+        <!-- Header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                style="@style/W.Title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:accessibilityHeading="true"
+                android:text="Terrain" />
+
+            <TextView
+                android:id="@+id/tvTerrainSubtitle"
+                style="@style/W.Body.Muted"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_weight="1"
+                android:maxLines="1"
+                android:text="This trip" />
+
+            <View
+                android:layout_width="20dp"
+                android:layout_height="3dp"
+                android:background="@drawable/bg_rounded_bar"
+                android:backgroundTint="@color/fill" />
+
+            <TextView
+                style="@style/W.Legend"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="Elevation" />
+
+            <View
+                android:layout_width="20dp"
+                android:layout_height="4dp"
+                android:layout_marginStart="20dp"
+                android:background="@drawable/bg_rounded_bar"
+                android:backgroundTint="@color/accent" />
+
+            <TextView
+                style="@style/W.Legend"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="Regenerating" />
+        </LinearLayout>
+
+        <!-- Now / Highest / Lowest / Climbed / Descended -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <include
+                android:id="@+id/cellNow"
+                layout="@layout/item_stat_cell" />
+
+            <include
+                android:id="@+id/cellHighest"
+                layout="@layout/item_stat_cell" />
+
+            <include
+                android:id="@+id/cellLowest"
+                layout="@layout/item_stat_cell" />
+
+            <include
+                android:id="@+id/cellClimbed"
+                layout="@layout/item_stat_cell" />
+
+            <include
+                android:id="@+id/cellDescended"
+                layout="@layout/item_stat_cell" />
+        </LinearLayout>
+
+        <com.landroverdash.app.ElevationProfileView
+            android:id="@+id/elevationProfile"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="14dp"
             android:layout_weight="1" />
-
     </LinearLayout>
-
-    <!-- High / Low summary -->
-    <TextView
-        android:id="@+id/tvElevSummary"
-        android:text="↑ -- m   ·   ↓ -- m"
-        android:textColor="#2D6B40"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp" />
-
-    <!-- Chart -->
-    <com.github.mikephil.charting.charts.LineChart
-        android:id="@+id/elevationChart"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
-
 </LinearLayout>

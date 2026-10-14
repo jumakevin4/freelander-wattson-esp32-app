@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status dot with a soft ring, for the Connect screen. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/accent_tint" />
+            <size android:width="22dp" android:height="22dp" />
+        </shape>
+    </item>
+    <item android:left="6dp" android:top="6dp" android:right="6dp" android:bottom="6dp">
+        <shape android:shape="oval">
+            <solid android:color="@color/accent" />
+        </shape>
+    </item>
+</layer-list>

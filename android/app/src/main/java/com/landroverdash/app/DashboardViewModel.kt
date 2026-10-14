@@ -3,6 +3,7 @@ package com.landroverdash.app
 import android.app.Application
 import android.bluetooth.BluetoothDevice
 import android.content.Context
+import android.location.Location
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -17,10 +18,20 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** One completed 5-minute energy window — used to populate the trip energy graph. */
-data class EnergyBucket(val timestampMs: Long, val wh: Float)
+/**
+ * One energy window for the trip energy graph: [wh] drawn from the pack and
+ * [regenWh] put back by regen during the window (both positive).
+ */
+data class EnergyBucket(val timestampMs: Long, val wh: Float, val regenWh: Float = 0f)
 
 private const val TAG_VM = "EvDashboard"
+
+/**
+ * Pack resistance the app assumes, Ω: typical for an 84S pack (a 200 A pull
+ * sags it ~24 V). Used to undo the sag for the battery %, and as the yardstick
+ * for the pack-sag check in Diagnostics.
+ */
+internal const val PACK_R_OHM = 0.12f
 
 /** One 500ms data sample for the rolling 30-min efficiency window. */
 private data class WindowSample(val timestampMs: Long, val wh: Float, val distKm: Float)
@@ -73,6 +84,44 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
     // Largest gap between samples we'll integrate over. Anything longer is treated
     // as a dropout (BT loss, app paused) so we don't fabricate distance/energy.
     private val MAX_SAMPLE_GAP_MS = 5_000L
+
+    /**
+     * Last pack voltage the car actually reported. A packet that arrives with
+     * 0 V (the ESP32 had no fresh answer from the inverter) still carries its
+     * speed and current, so it used to add its distance to the trip but no
+     * energy at all, which made km/kWh look better than it was: a third of
+     * readings like that turns 6 km/kWh into 8.7. Pack voltage changes slowly,
+     * so the last real reading stands in. Cleared when the link drops.
+     */
+    private var lastPackVoltageV = 0f
+
+    // ── Trip check (Settings → Diagnostics), see [TripCheck] ─────────────────
+    private var chkLiveKm      = 0f
+    private var chkReplayedKm  = 0f
+    private var chkGpsKm       = 0f
+    private var chkMoving      = 0
+    private var chkNoVolts     = 0
+    private var chkZeroAmps    = 0
+    private var chkDrawnWh     = 0f
+    private var chkSocStart    = -1
+    private var chkSocNow      = -1
+    private var chkSocSpanWh   = 0f
+    /** Last usable GPS fix and the newest live speed, for the GPS distance. */
+    private var lastFix: GpsSample? = null
+    private var lastLiveSpeedKmh = 0f
+    /**
+     * The current's behaviour, from consecutive LIVE readings (replayed ones
+     * interleave from firmware v7.3, so they would make false neighbours):
+     * lone 0 A readings between two drawing ones, and the pack sag (volts
+     * lost per amp) across quick load changes.
+     */
+    private var chkPrevA = Float.NaN
+    private var chkPrevPrevA = Float.NaN
+    private var chkPrevV = 0f
+    private var chkPrevMs = 0L
+    private var chkBlips = 0
+    private val chkSag = FloatArray(600)
+    private var chkSagCount = 0
     // Minimum interval between disk-backed trip backups.
     private val BACKUP_INTERVAL_MS = 15_000L
 
@@ -144,8 +193,9 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
         while (i < baseBuckets.size) {
             val end = minOf(i + g, baseBuckets.size)
             var wh = 0f
-            for (j in i until end) wh += baseBuckets[j].wh
-            out.add(EnergyBucket(baseBuckets[i].timestampMs, wh))
+            var regenWh = 0f
+            for (j in i until end) { wh += baseBuckets[j].wh; regenWh += baseBuckets[j].regenWh }
+            out.add(EnergyBucket(baseBuckets[i].timestampMs, wh, regenWh))
             i = end
         }
         _bucketMinutes.value = g
@@ -186,17 +236,56 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
     private val MIN_TRIP_DISTANCE_KM = 0.5f
 
     /** Lifetime avg Wh/km from trip history — startup-range fallback until the
-     *  rolling 30-min window has data. 0 while no trips are recorded yet. */
-    private var lifetimeEffWhPerKm = 0f
+     *  rolling 30-min window has data, and the "your average" the Drive and
+     *  Energy screens coach against. 0 while no trips are recorded yet. */
+    private val _lifetimeEffWhPerKm = MutableStateFlow(0f)
+    val lifetimeEffWhPerKm: StateFlow<Float> = _lifetimeEffWhPerKm.asStateFlow()
+
+    /** Last 30 minutes of driving, Wh/km — what the range projection uses. */
+    private val _rollingEffWhPerKm = MutableStateFlow(0f)
+    val rollingEffWhPerKm: StateFlow<Float> = _rollingEffWhPerKm.asStateFlow()
+
+    // ── Regen ────────────────────────────────────────────────────────────────
+    // sessionWh is net (regen lowers it). Each packet's fall in it is energy
+    // put back; tracked separately so the energy graph can draw regen below the
+    // line and the Energy page can say how much was recovered.
+    /** Recovered this trip, Wh. Replayed records count — it is a trip total. */
+    private var regenWhTotal  = 0f
+    /** Recovered in the energy bucket being filled. */
+    private var bucketRegenWh = 0f
+    /** Drawn / recovered since the last elevation profile point (live only). */
+    private var segDrawWh     = 0f
+    private var segRegenWh    = 0f
 
     init {
+        // Inverter errors are logged on the phone (Settings → Inverter).
+        FaultLog.init(app)
+
         // Recover any interrupted trip off the main thread — the DB open + insert
         // must never block ViewModel construction (cold-start ANR).
         viewModelScope.launch(Dispatchers.IO) { recoverBackupIfExists() }
 
         viewModelScope.launch {
-            dao.avgEfficiencyWhPerKm().collect { lifetimeEffWhPerKm = it }
+            dao.avgEfficiencyWhPerKm().collect { _lifetimeEffWhPerKm.value = it }
         }
+
+        // Publish the trip process-wide. The side rail opens Energy and Terrain
+        // from any screen, so they read these instead of Intent extras — and
+        // keep updating while they are open.
+        mirror(projectedRangeKm,   LiveTripData.rangeKm)
+        mirror(efficiencyWhPerKm,  LiveTripData.tripEffWhPerKm)
+        mirror(lifetimeEffWhPerKm, LiveTripData.lifetimeEffWhPerKm)
+        mirror(rollingEffWhPerKm,  LiveTripData.rollingEffWhPerKm)
+        mirror(tripDistanceKm,     LiveTripData.tripDistanceKm)
+        mirror(tripTimeMin,        LiveTripData.tripTimeMin)
+        mirror(avgSpeedKmh,        LiveTripData.avgSpeedKmh)
+        mirror(energyBuckets,      LiveTripData.energyBuckets)
+        mirror(bucketMinutes,      LiveTripData.bucketMinutes)
+        mirror(elevationProfile,   LiveTripData.elevationProfile)
+        mirror(currentElevationM,  LiveTripData.currentElevationM)
+        mirror(minElevationM,      LiveTripData.minElevationM)
+        mirror(maxElevationM,      LiveTripData.maxElevationM)
+        viewModelScope.launch { carData.collect { LiveTripData.socPct.value = it.battSOC } }
 
         // LiveVehicleData is a process-wide singleton, so it outlives this
         // ViewModel. Back out of the dashboard and return without the process
@@ -204,6 +293,24 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
         // minimum 12 V and used kWh — shown next to a trip reading 0.0 km, and
         // unable to fall because peak and minimum only ever move one way.
         LiveVehicleData.reset()
+        // Nothing is live until this ViewModel's own link delivers a packet.
+        LiveVehicleData.onLinkLost()
+        LiveTripData.regenKwh.value = 0f
+        LiveTripData.rangeBasisWhPerKm.value = 0f
+        LiveTripData.rangeBasisIsLifetime.value = false
+        LiveTripData.check.value = null
+
+        // Link lost: clear the live readings so no screen shows them as current.
+        viewModelScope.launch {
+            btService.connectionState.collect { s ->
+                if (s == BluetoothService.ConnectionState.DISCONNECTED ||
+                    s == BluetoothService.ConnectionState.ERROR) {
+                    LiveVehicleData.onLinkLost()
+                    // The pack may be charged before the link is back.
+                    lastPackVoltageV = 0f
+                }
+            }
+        }
 
         // Publish the live link so screens that don't own it (Settings →
         // firmware update) can talk to the ESP32 over the same socket.
@@ -262,6 +369,15 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
                 val distDelta = if (data.speedKmh > 0f)
                     data.speedKmh * dtMs / 3_600_000f else 0f
 
+                if (live) { chkLiveKm += distDelta; lastLiveSpeedKmh = data.speedKmh }
+                else chkReplayedKm += distDelta
+                if (data.speedKmh > 3f) {
+                    chkMoving++
+                    if (data.battVoltage <= 0f) chkNoVolts++
+                    if (data.battCurrent == 0f) chkZeroAmps++
+                }
+                if (live) checkCurrent(data, now)
+
                 if (data.speedKmh > 0) {
                     tripSaved = false
                     // Only LIVE movement resets the inactivity timer. A replay
@@ -277,7 +393,9 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
                     _avgSpeedKmh.value = totalSpeedSum / totalSpeedSamples
                 }
 
-                energyManager.onSample(data.battVoltage, data.battCurrent,
+                if (data.battVoltage > 0f) lastPackVoltageV = data.battVoltage
+                val packVoltage = if (data.battVoltage > 0f) data.battVoltage else lastPackVoltageV
+                energyManager.onSample(packVoltage, data.battCurrent,
                     data.speedKmh, distDelta, dtMs)
                 // Publish used energy for the details page. Integrated from
                 // measured volts x amps, so it is a real figure rather than
@@ -301,9 +419,28 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
                 if (dist > 0.1f && energyManager.sessionWh > 0f)
                     _efficiencyWhPerKm.value = energyManager.sessionWh / dist
 
-                // Delta energy this 500ms packet
-                val delta = (energyManager.sessionWh - lastSessionWh).coerceAtLeast(0f)
+                // Delta energy this 500ms packet: drawn (delta) and recovered by
+                // regen (regenDelta). The bucket and range maths use the drawn
+                // energy exactly as before; regen is tracked alongside it.
+                val rawDelta   = energyManager.sessionWh - lastSessionWh
+                val delta      = rawDelta.coerceAtLeast(0f)
+                val regenDelta = (-rawDelta).coerceAtLeast(0f)
                 lastSessionWh = energyManager.sessionWh
+                regenWhTotal += regenDelta
+                chkDrawnWh += delta
+                if (live && data.battSOC >= 0) {
+                    // The % drop is compared with energy measured over the same
+                    // live span, starting when the trip gets going.
+                    if (chkSocStart < 0 && data.speedKmh > 0f) chkSocStart = data.battSOC
+                    else if (chkSocStart >= 0) chkSocSpanWh += rawDelta
+                    chkSocNow = data.battSOC
+                }
+                if (live) publishCheck()
+                if (live) {
+                    segDrawWh  += delta
+                    segRegenWh += regenDelta
+                    LiveTripData.regenKwh.value = regenWhTotal / 1000f
+                }
 
                 // 1-min base energy buckets → adaptive display granularity.
                 //
@@ -323,6 +460,7 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
                 if (tripStartMs > 0L) {
                     if (bucketStartMs == 0L) bucketStartMs = tripStartMs
                     bucketWh += delta
+                    bucketRegenWh += regenDelta
                     // CLOSE EVERY ELAPSED MINUTE, not just one per packet.
                     //
                     // Closing a single bucket regardless of how far the clock
@@ -333,8 +471,9 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
                     var closed = 0
                     while ((sampleClockMs - bucketStartMs) >= BUCKET_MS &&
                            closed < MAX_BUCKETS_PER_SAMPLE) {
-                        baseBuckets.add(EnergyBucket(bucketStartMs, bucketWh))
+                        baseBuckets.add(EnergyBucket(bucketStartMs, bucketWh, bucketRegenWh))
                         bucketWh = 0f          // only the first bucket gets the energy
+                        bucketRegenWh = 0f
                         bucketStartMs += BUCKET_MS
                         closed++
                     }
@@ -383,11 +522,20 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
                     if (winWhSum   < 0f) winWhSum   = 0f
                     if (winDistSum < 0f) winDistSum = 0f
                     val rollingEff = if (winDistSum > 0.1f) winWhSum / winDistSum else 0f
-                    _projectedRangeKm.value = when {
-                        rollingEff > 5f            -> _remainingKwh.value * 1000f / rollingEff
-                        lifetimeEffWhPerKm > 5f    -> _remainingKwh.value * 1000f / lifetimeEffWhPerKm
-                        else                       -> 0f
+                    val lifetimeEff = _lifetimeEffWhPerKm.value
+                    // Same rule as before: the 30-minute window when it has data,
+                    // else the all-trips average. Published so the Drive screen
+                    // can say which one the range is based on.
+                    val basis = when {
+                        rollingEff > 5f  -> rollingEff
+                        lifetimeEff > 5f -> lifetimeEff
+                        else             -> 0f
                     }
+                    _rollingEffWhPerKm.value = rollingEff
+                    _projectedRangeKm.value =
+                        if (basis > 0f) _remainingKwh.value * 1000f / basis else 0f
+                    LiveTripData.rangeBasisWhPerKm.value = basis
+                    LiveTripData.rangeBasisIsLifetime.value = rollingEff <= 5f && lifetimeEff > 5f
 
                     // Throttle disk-backed backups — no need to write twice a second.
                     if (tripStartMs > 0 && dist >= MIN_TRIP_DISTANCE_KM &&
@@ -417,10 +565,74 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
         // GPS elevation — smooth out noise, track current/min/max, build profile.
         viewModelScope.launch {
             locationService.samples.collect { s ->
+                onGpsDistance(s)
                 if (!s.hasAltitude) return@collect
                 onElevationSample(s.altitudeM)
             }
         }
+    }
+
+    /**
+     * GPS distance for the trip check. Only while live packets are arriving and
+     * the car is moving, so it covers the same stretches as [chkLiveKm]: GPS
+     * wander while parked isn't distance, and a stretch with no packets has no
+     * speed distance to compare against.
+     */
+    private fun onGpsDistance(s: GpsSample) {
+        if (s.accuracyM < 0f || s.accuracyM > 30f) return
+        val prev = lastFix
+        lastFix = s
+        if (prev == null || tripStartMs == 0L) return
+        val live = System.currentTimeMillis() - lastUpdateMs < 3_000L
+        if (!live || lastLiveSpeedKmh < 3f) return
+        val dtS = (s.timeMs - prev.timeMs) / 1000f
+        if (dtS <= 0f || dtS > 30f) return
+        val m = FloatArray(1)
+        Location.distanceBetween(prev.lat, prev.lon, s.lat, s.lon, m)
+        if (m[0] / dtS > 70f) return                // over 250 km/h: a GPS jump
+        chkGpsKm += m[0] / 1000f
+    }
+
+    private fun publishCheck() {
+        val pairs = minOf(chkSagCount, chkSag.size)
+        val sag = if (pairs >= 20) chkSag.copyOf(pairs).also { it.sort() }[pairs / 2] else Float.NaN
+        LiveTripData.check.value = TripCheck(
+            liveKm = chkLiveKm, gpsKm = chkGpsKm, replayedKm = chkReplayedKm,
+            movingReadings = chkMoving, noVoltage = chkNoVolts, zeroCurrent = chkZeroAmps,
+            zeroBlips = chkBlips, sagOhm = sag, sagPairs = chkSagCount,
+            drawnKwh = chkDrawnWh / 1000f, regenKwh = regenWhTotal / 1000f,
+            netKwh = energyManager.sessionWh / 1000f,
+            socStart = chkSocStart, socNow = chkSocNow, socSpanKwh = chkSocSpanWh / 1000f)
+    }
+
+    /**
+     * Two checks on the current, from consecutive live readings.
+     *
+     * Lone zeros: a 0 A reading between two drawing more than 5 A, while
+     * moving. Power can't drop to nothing and come straight back in half a
+     * second; a coast eases down through smaller values first. So these are
+     * readings that arrived without a current.
+     *
+     * Pack sag: across a quick load change (≥ 25 A within 1.5 s) the pack
+     * voltage drops by current × pack resistance, so −ΔV/ΔI measures that
+     * resistance from the very readings the energy is built on. If the current
+     * reads low by some factor, this comes out high by the same factor. Zero
+     * readings are left out, as they may be missing currents.
+     */
+    private fun checkCurrent(d: CarData, now: Long) {
+        val a = d.battCurrent
+        val v = d.battVoltage
+        if (d.speedKmh > 3f && chkPrevA == 0f && chkPrevPrevA > 5f && a > 5f) chkBlips++
+        val dA = a - chkPrevA
+        if (v > 0f && chkPrevV > 0f && a != 0f && chkPrevA != 0f && !chkPrevA.isNaN() &&
+            now - chkPrevMs <= 1_500L && kotlin.math.abs(dA) >= 25f) {
+            val r = -(v - chkPrevV) / dA
+            if (r > 0f && r < 1f) chkSag[chkSagCount++ % chkSag.size] = r
+        }
+        chkPrevPrevA = chkPrevA
+        chkPrevA = a
+        chkPrevV = v
+        chkPrevMs = now
     }
 
     private fun onElevationSample(rawAltM: Float) {
@@ -437,10 +649,23 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
         val dist = _tripDistanceKm.value
         if (lastProfileDistKm < 0f || dist - lastProfileDistKm >= elevStepKm) {
             lastProfileDistKm = dist
-            elevationPoints.add(ElevationPoint(dist, alt))
+            // Net regen over the stretch since the previous point (≥ 1 Wh so a
+            // coast with a trickle of regen doesn't count).
+            val regen = segRegenWh > segDrawWh && segRegenWh >= 1f
+            segDrawWh = 0f
+            segRegenWh = 0f
+            elevationPoints.add(ElevationPoint(dist, alt, regen))
             if (elevationPoints.size > ELEV_PROFILE_BUDGET) {
-                // Halve resolution: keep every 2nd point, double the step
-                val thinned = elevationPoints.filterIndexed { i, _ -> i % 2 == 0 }
+                // Halve resolution: keep every 2nd point, double the step. A kept
+                // point's stretch now also covers the dropped one before it, so
+                // it is regen if either stretch was.
+                val thinned = elevationPoints.mapIndexedNotNull { i, p ->
+                    when {
+                        i % 2 != 0 -> null
+                        i > 0 && elevationPoints[i - 1].regen && !p.regen -> p.copy(regen = true)
+                        else -> p
+                    }
+                }
                 elevationPoints.clear()
                 elevationPoints.addAll(thinned)
                 elevStepKm *= 2f
@@ -477,7 +702,7 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
     // taken from estimated open-circuit voltage (v + i * PACK_R) rather than
     // the raw reading. Without it the dial dips on every hill and recovers at
     // the top. 0.12 Ω is typical for an 84S pack: a 200 A pull sags it ~24 V.
-    private val PACK_R = 0.12f
+    private val PACK_R = PACK_R_OHM
 
     /**
      * SOC from pack open-circuit volts. vFull/vEmpty come from Settings; if
@@ -589,6 +814,11 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Called by the activity once ACCESS_FINE_LOCATION has been granted. */
     fun startLocationTracking() = locationService.start()
+
+    /** Copy a ViewModel flow into the process-wide [LiveTripData]. */
+    private fun <T> mirror(src: StateFlow<T>, dst: MutableStateFlow<T>) {
+        viewModelScope.launch { src.collect { dst.value = it } }
+    }
 
     /** Saves the trip and resets for the next one. True if it is in the database. */
     private suspend fun saveTripToDb(): Boolean {
@@ -707,14 +937,6 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
     /** (received, announced) during a history replay. */
     val syncProgress = btService.syncProgress
 
-    /**
-     * The refusal last shown as a toast. modeRefusals replays its latest value
-     * to every new collector (so a refusal survives a trip to Settings), and
-     * the dashboard re-collects on every return — which re-showed an old
-     * "vehicle moving" toast each time. Kept here so it survives the activity.
-     */
-    var lastRefusalShown: String? = null
-
     enum class ResetResult { SAVED, TOO_SHORT, SAVE_FAILED }
 
     /** Shortest trip that is saved to history (for the reset confirmation). */
@@ -782,7 +1004,22 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
         energyManager.resetSession()
         bucketStartMs = 0L
         bucketWh = 0f
+        bucketRegenWh = 0f
+        regenWhTotal = 0f
+        segDrawWh = 0f
+        segRegenWh = 0f
+        _rollingEffWhPerKm.value = 0f
+        LiveTripData.regenKwh.value = 0f
+        LiveTripData.rangeBasisWhPerKm.value = 0f
+        LiveTripData.rangeBasisIsLifetime.value = false
         lastSessionWh = 0f
+        chkLiveKm = 0f; chkReplayedKm = 0f; chkGpsKm = 0f
+        chkMoving = 0; chkNoVolts = 0; chkZeroAmps = 0
+        chkDrawnWh = 0f; chkSocStart = -1; chkSocNow = -1; chkSocSpanWh = 0f
+        chkPrevA = Float.NaN; chkPrevPrevA = Float.NaN; chkPrevV = 0f; chkPrevMs = 0L
+        chkBlips = 0; chkSagCount = 0
+        lastFix = null
+        LiveTripData.check.value = null
         sampleClockMs = 0L
         baseBuckets.clear()
         _energyBuckets.value = emptyList()

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A caption over a value, e.g. "Highest" / "2,318 m". Include with an
+     android:id; the activity finds tvCellLabel and tvCellValue inside it. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_weight="1"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/tvCellLabel"
+        style="@style/W.StatLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+
+    <TextView
+        android:id="@+id/tvCellValue"
+        style="@style/W.StatValue"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="–"
+        android:textSize="28sp" />
+</LinearLayout>

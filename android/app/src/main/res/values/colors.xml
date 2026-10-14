@@ -2,4 +2,49 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- ── Wattson dark theme: near-black, greyscale, one accent ─────────────
+         Teal is the only colour with a job: energy coming back (regen), the
+         selected item, and "better than usual". Amber and red are reserved for
+         warnings and faults. Everything else is grey. -->
+    <color name="bg">#07090A</color>
+    <color name="rail">#0B0E0F</color>
+    <color name="rail_divider">#161D1F</color>
+    <color name="surface">#0D1213</color>
+    <color name="surface_raised">#111819</color>
+    <color name="surface_selected">#162022</color>
+    <color name="line">#1A2224</color>
+    <color name="line_strong">#263133</color>
+    <color name="track">#172022</color>
+    <color name="band_track">#121A1C</color>
+    <color name="tick">#34403F</color>
+    <color name="input_bg">#090D0E</color>
+
+    <color name="text">#EEF3F1</color>
+    <color name="text2">#A3ADAA</color>
+    <color name="text3">#7B8582</color>
+    <color name="text_muted">#5E6966</color>
+    <color name="fill">#E6ECEA</color>
+    <color name="bar_used">#6F7B78</color>
+
+    <color name="accent">#3EE0C5</color>
+    <color name="on_accent">#06120F</color>
+    <color name="accent_tint">#10292A</color>
+    <color name="accent_line">#23403C</color>
+
+    <color name="warn">#FFB547</color>
+    <color name="warn_soft">#E8CFA2</color>
+    <color name="warn_bg">#231A09</color>
+    <color name="warn_line">#5A4216</color>
+    <color name="warn_track">#2A2310</color>
+
+    <color name="crit">#FF6B57</color>
+    <color name="crit_soft">#F3B8AE</color>
+    <color name="crit_bg">#2A1210</color>
+    <color name="crit_line">#5C2A24</color>
+
+    <color name="ripple">#26FFFFFF</color>
+    <!-- Modes tiles -->
+    <color name="mode_bar_off">#232E30</color>
+    <color name="mode_name_idle">#C9D1CE</color>
 </resources>

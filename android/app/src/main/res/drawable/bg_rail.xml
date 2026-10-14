@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><color android:color="@color/rail" /></item>
+    <item android:gravity="end|fill_vertical" android:width="1dp">
+        <color android:color="@color/rail_divider" />
+    </item>
+</layer-list>

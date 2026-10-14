@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One entry in the Settings sub-menu: the one-word section name, and a
+     short live detail on the right (capacity, firmware version, On/Off …).
+     Selected state comes from SettingsActivity. The activity's includes set
+     the height (the entries share the column); 72dp is the default. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="72dp"
+    android:background="@drawable/bg_settings_nav_item"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp">
+
+    <TextView
+        android:id="@+id/tvNavLabel"
+        style="@style/W.Text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:duplicateParentState="true"
+        android:fontFamily="@font/archivo_semibold"
+        android:lineSpacingMultiplier="1.1"
+        android:maxLines="2"
+        android:textColor="@color/settings_nav_label"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/tvNavDetail"
+        style="@style/W.Text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:duplicateParentState="true"
+        android:maxLines="1"
+        android:textColor="@color/settings_nav_detail"
+        android:textSize="14sp" />
+</LinearLayout>

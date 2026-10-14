@@ -1,7 +1,41 @@
 <resources>
     <style name="Theme.LandroverEV" parent="Theme.AppCompat.NoActionBar">
-        <item name="android:windowBackground">#000000</item>
-        <item name="android:statusBarColor">#000000</item>
-        <item name="android:fontFamily">@font/landroverweb_bold</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <!-- Full screen: the dashboard needs all 600 px of the A6PF's height.
+             The navigation bar is hidden in code (WattsonActivity); swipe from
+             the edge to bring the system bars back for a moment. -->
+        <item name="android:windowFullscreen">true</item>
+        <!-- android:fontFamily only. AppCompat gives the app-namespace
+             fontFamily priority over android:fontFamily, so setting it here
+             would override the font of every TextView in every layout. -->
+        <item name="android:fontFamily">@font/archivo_regular</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/text2</item>
+        <item name="android:textColorHint">@color/text_muted</item>
+        <item name="colorPrimary">@color/bg</item>
+        <item name="colorPrimaryDark">@color/bg</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="colorControlNormal">@color/text3</item>
+        <item name="colorControlActivated">@color/accent</item>
+        <item name="android:alertDialogTheme">@style/Theme.LandroverEV.Dialog</item>
+        <item name="alertDialogTheme">@style/Theme.LandroverEV.Dialog.AppCompat</item>
+    </style>
+
+    <!-- The app builds its dialogs with android.app.AlertDialog. -->
+    <style name="Theme.LandroverEV.Dialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorBackground">@color/surface_raised</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/text2</item>
+        <item name="android:fontFamily">@font/archivo_regular</item>
+    </style>
+
+    <style name="Theme.LandroverEV.Dialog.AppCompat" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:colorBackground">@color/surface_raised</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:fontFamily">@font/archivo_regular</item>
     </style>
 </resources>

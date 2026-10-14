@@ -73,6 +73,12 @@
             </intent-filter>
         </receiver>
 
+        <!-- Drive modes, moved off the dashboard so the tiles can be big. -->
+        <activity
+            android:name=".ModesActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
         <activity
             android:name=".DetailsActivity"
             android:exported="false"
@@ -84,15 +90,23 @@
             android:screenOrientation="landscape" />
 
         <activity
-            android:name=".ElevationActivity"
+            android:name=".BatteryActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
 
         <activity
+            android:name=".ElevationActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <!-- adjustPan: the app runs full screen, where adjustResize does
+             nothing, so the window pans to keep the field being typed in
+             above the keyboard instead. -->
+        <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:screenOrientation="landscape"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="adjustPan|stateHidden" />
 
     </application>
 

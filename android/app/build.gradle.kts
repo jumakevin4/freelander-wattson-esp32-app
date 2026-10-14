@@ -44,7 +44,8 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
-    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
+    // MPAndroidChart is no longer used: the Energy and Terrain charts are
+    // drawn by EnergyBarsView and ElevationProfileView.
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

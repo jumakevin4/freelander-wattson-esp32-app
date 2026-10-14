@@ -26,8 +26,12 @@ data class GpsSample(
     val hasAltitude: Boolean
 )
 
-/** One point on the trip elevation profile: smoothed altitude at a trip distance. */
-data class ElevationPoint(val distanceKm: Float, val altitudeM: Float)
+/**
+ * One point on the trip elevation profile: smoothed altitude at a trip distance.
+ * [regen] is true when more energy was recovered than drawn on the stretch that
+ * ends at this point, so the Terrain page can colour the descents.
+ */
+data class ElevationPoint(val distanceKm: Float, val altitudeM: Float, val regen: Boolean = false)
 
 /**
  * Thin wrapper over the framework [LocationManager] (no Google Play Services,

@@ -1,136 +1,105 @@
 package com.landroverdash.app
 
-import android.content.Context
-import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
-import com.github.mikephil.charting.charts.LineChart
-import com.github.mikephil.charting.components.XAxis
-import com.github.mikephil.charting.data.Entry
-import com.github.mikephil.charting.data.LineData
-import com.github.mikephil.charting.data.LineDataSet
-import com.github.mikephil.charting.formatter.ValueFormatter
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
- * Read-only elevation profile (altitude vs trip distance) for the current trip.
- * Data is passed in as parallel float arrays so this screen stays decoupled from
- * the dashboard ViewModel. Back via the header button (the chart itself is
- * free for touch/scroll interaction).
+ * Terrain — elevation along this trip, with the stretches where regen put
+ * energy back drawn in the accent colour.
+ *
+ * Reads [LiveTripData], so it opens from the rail on any screen and keeps
+ * drawing while open. (It used to take a snapshot through Intent extras.)
  */
-class ElevationActivity : AppCompatActivity() {
+class ElevationActivity : WattsonActivity() {
 
-    companion object {
-        const val EXTRA_DIST = "dist_km"
-        const val EXTRA_ALT  = "alt_m"
-        const val EXTRA_MIN  = "min_m"
-        const val EXTRA_MAX  = "max_m"
-    }
-
-    private lateinit var chart: LineChart
-
-    private val lineColour = Color.parseColor("#1A6B3A")
-    private val fillColour  = Color.parseColor("#661A6B3A")
+    /** Ignore up-and-down smaller than this when adding up climb and descent:
+     *  GPS altitude wanders a few metres even when parked. */
+    private val CLIMB_HYSTERESIS_M = 3f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_elevation)
+        bindNavRail(Screen.TERRAIN)
 
-        applyTheme()
+        val profile = findViewById<ElevationProfileView>(R.id.elevationProfile)
+        val subtitle = findViewById<TextView>(R.id.tvTerrainSubtitle)
+        val now = cell(R.id.cellNow, "Now")
+        val highest = cell(R.id.cellHighest, "Highest")
+        val lowest = cell(R.id.cellLowest, "Lowest")
+        val climbed = cell(R.id.cellClimbed, "Climbed")
+        val descended = cell(R.id.cellDescended, "Descended")
 
-        chart = findViewById(R.id.elevationChart)
-
-
-        val dist = intent.getFloatArrayExtra(EXTRA_DIST)
-        val alt  = intent.getFloatArrayExtra(EXTRA_ALT)
-        val minM = intent.getFloatExtra(EXTRA_MIN, Float.NaN)
-        val maxM = intent.getFloatExtra(EXTRA_MAX, Float.NaN)
-
-        findViewById<TextView>(R.id.tvElevSummary).text =
-            "↑ ${fmt(maxM)}   ·   ↓ ${fmt(minM)}"
-
-        setupChart()
-
-        if (dist == null || alt == null || dist.size < 2 || dist.size != alt.size) {
-            // Chart-native note, same style as the Energy Use page
-            chart.clear()
-            chart.invalidate()
-            return
-        }
-        drawProfile(dist, alt)
-    }
-
-    private fun fmt(m: Float): String = if (m.isNaN()) "-- m" else "%.0f m".format(m)
-
-    private fun setupChart() {
-        val textCol  = Color.WHITE
-        val labelCol = Color.parseColor("#DDEEDF")
-
-        chart.apply {
-            description.isEnabled = false
-            legend.isEnabled      = false
-            // Touch stays ENABLED so long profiles can be pinch-zoomed/panned
-            setTouchEnabled(true)
-            isDragEnabled = true
-            setScaleEnabled(true)
-            setPinchZoom(true)
-            setDrawGridBackground(false)
-            setBackgroundColor(Color.TRANSPARENT)
-            setNoDataText("No elevation data yet this trip")
-            setNoDataTextColor(labelCol)
-
-            // Floating style, matching the Energy Use page: no axis/grid lines,
-            // 18sp bold labels.
-            xAxis.apply {
-                position  = XAxis.XAxisPosition.BOTTOM
-                setDrawAxisLine(false)
-                setDrawGridLines(false)
-                textColor = textCol
-                textSize  = 18f
-                typeface  = android.graphics.Typeface.DEFAULT_BOLD
-                valueFormatter = object : ValueFormatter() {
-                    override fun getFormattedValue(value: Float) = "%.1f km".format(value)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    LiveTripData.elevationProfile.collect { pts ->
+                        profile.setPoints(pts)
+                        val (up, down) = climbAndDescent(pts)
+                        val known = pts.size >= 2
+                        climbed.text = metres(when {
+                            !known -> Fmt.NONE; up < 0.5f -> "0"; else -> Fmt.signed(up) })
+                        descended.text = metres(when {
+                            !known -> Fmt.NONE; down < 0.5f -> "0"; else -> Fmt.signed(-down) })
+                        profile.contentDescription = describe(pts, up, down)
+                    }
+                }
+                launch {
+                    combine(LiveTripData.currentElevationM, LiveTripData.maxElevationM,
+                        LiveTripData.minElevationM) { c, hi, lo -> Triple(c, hi, lo) }
+                        .collect { (c, hi, lo) ->
+                            now.text = metres(Fmt.grouped(c))
+                            highest.text = metres(Fmt.grouped(hi))
+                            lowest.text = metres(Fmt.grouped(lo))
+                        }
+                }
+                launch {
+                    LiveTripData.tripDistanceKm.collect { km ->
+                        subtitle.text = String.format(Locale.US, "This trip · %.1f km", km)
+                    }
                 }
             }
-            axisLeft.apply {
-                setDrawAxisLine(false)
-                setDrawGridLines(false)
-                textColor = textCol
-                textSize  = 18f
-                typeface  = android.graphics.Typeface.DEFAULT_BOLD
-                valueFormatter = object : ValueFormatter() {
-                    override fun getFormattedValue(value: Float) = "%.0f m".format(value)
-                }
-            }
-            axisRight.isEnabled = false
-            extraBottomOffset   = 8f
         }
     }
 
-    private fun drawProfile(dist: FloatArray, alt: FloatArray) {
-        val entries = dist.indices.map { Entry(dist[it], alt[it]) }
-        val set = LineDataSet(entries, "Elevation").apply {
-            color           = lineColour
-            lineWidth        = 2.5f
-            setDrawCircles(false)
-            setDrawValues(false)
-            mode             = LineDataSet.Mode.CUBIC_BEZIER
-            setDrawFilled(true)
-            fillColor        = fillColour
-            fillAlpha        = 102
-        }
-        chart.data = LineData(set)
-        chart.invalidate()
+    private fun cell(id: Int, label: String): TextView {
+        val root = findViewById<View>(id)
+        root.findViewById<TextView>(R.id.tvCellLabel).text = label
+        return root.findViewById(R.id.tvCellValue)
     }
 
-    private fun applyTheme() {
-        val rootBg   = Color.parseColor("#000000")
-        // Same green as the Settings section headings.
-        val titleCol = Color.parseColor("#7FC49A")
-        val subCol   = Color.parseColor("#DDEEDF")
-        findViewById<View>(R.id.elevRoot).setBackgroundColor(rootBg)
-        findViewById<TextView>(R.id.tvElevChartTitle).setTextColor(titleCol)
-        findViewById<TextView>(R.id.tvElevSummary).setTextColor(subCol)
+    private fun metres(v: String): CharSequence =
+        if (v == Fmt.NONE) v else Fmt.valueUnit(this, v, "m")
+
+    /**
+     * Total climb and descent along the profile, in metres. A change only
+     * counts once it has moved [CLIMB_HYSTERESIS_M] from the last turning
+     * point, so GPS jitter doesn't add up to phantom hills.
+     */
+    private fun climbAndDescent(pts: List<ElevationPoint>): Pair<Float, Float> {
+        if (pts.size < 2) return 0f to 0f
+        var ref = pts[0].altitudeM
+        var up = 0f
+        var down = 0f
+        for (p in pts) {
+            val d = p.altitudeM - ref
+            if (d >= CLIMB_HYSTERESIS_M) { up += d; ref = p.altitudeM }
+            else if (d <= -CLIMB_HYSTERESIS_M) { down -= d; ref = p.altitudeM }
+        }
+        return up to down
+    }
+
+    private fun describe(pts: List<ElevationPoint>, up: Float, down: Float): String {
+        if (pts.size < 2) return "No elevation data yet this trip"
+        val hi = pts.maxByOrNull { it.altitudeM }!!
+        return String.format(Locale.US,
+            "Elevation along this trip: %.0f km, highest %,.0f m at %.0f km, climbed %,.0f m, descended %,.0f m, now %,.0f m",
+            pts.last().distanceKm, hi.altitudeM, hi.distanceKm, up, down, pts.last().altitudeM)
     }
 }

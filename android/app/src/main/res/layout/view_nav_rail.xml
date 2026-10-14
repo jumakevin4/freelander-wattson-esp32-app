@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Side rail shared by every screen except Connect. WattsonActivity.bindNavRail()
+    highlights the current item (isSelected) and handles taps. The five items
+    are 80 dp squares, 6 dp apart, centred in the rail's height. Battery and
+    Settings have no item here: they open from the Vehicle screen.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/navRail"
+    android:layout_width="96dp"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_rail"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:paddingTop="14dp"
+    android:paddingBottom="14dp">
+
+    <LinearLayout
+        android:id="@+id/navDrive"
+        style="@style/W.RailItem">
+        <ImageView
+            style="@style/W.RailIcon"
+            android:src="@drawable/ic_drive" />
+        <TextView
+            style="@style/W.RailLabel"
+            android:text="Drive" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/navModes"
+        style="@style/W.RailItem"
+        android:layout_marginTop="6dp">
+        <ImageView
+            style="@style/W.RailIcon"
+            android:src="@drawable/ic_modes" />
+        <TextView
+            style="@style/W.RailLabel"
+            android:text="Modes" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/navEnergy"
+        style="@style/W.RailItem"
+        android:layout_marginTop="6dp">
+        <ImageView
+            style="@style/W.RailIcon"
+            android:src="@drawable/ic_energy" />
+        <TextView
+            style="@style/W.RailLabel"
+            android:text="Energy" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/navTerrain"
+        style="@style/W.RailItem"
+        android:layout_marginTop="6dp">
+        <ImageView
+            style="@style/W.RailIcon"
+            android:src="@drawable/ic_terrain" />
+        <TextView
+            style="@style/W.RailLabel"
+            android:text="Terrain" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/navVehicle"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/bg_rail_item"
+        android:clickable="true"
+        android:focusable="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical">
+            <ImageView
+                style="@style/W.RailIcon"
+                android:src="@drawable/ic_vehicle" />
+            <TextView
+                style="@style/W.RailLabel"
+                android:text="Vehicle" />
+        </LinearLayout>
+
+        <!-- Amber (warning) or red (fault) dot, so health problems are
+             visible from every screen. Placed from the item's centre so it
+             sits on the icon's top-right corner however tall the item is. -->
+        <View
+            android:id="@+id/navVehicleBadge"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:layout_gravity="center"
+            android:translationX="13dp"
+            android:translationY="-25dp"
+            android:background="@drawable/dot"
+            android:backgroundTint="@color/warn"
+            android:visibility="gone" />
+    </FrameLayout>
+
+</LinearLayout>

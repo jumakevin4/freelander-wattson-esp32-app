@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Drive-mode chip awaiting confirmation: amber outline, dark fill.
-     Distinct from both the pale "selected" chip and the quiet idle outline. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="#241A00" />
-    <corners android:radius="8dp" />
-    <stroke android:width="2dp" android:color="#FFC14D" />
-</shape>

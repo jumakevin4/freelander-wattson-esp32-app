@@ -13,31 +13,64 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.widget.ArrayAdapter
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.BaseAdapter
+import android.widget.ImageView
 import android.widget.ListView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 
-class MainActivity : AppCompatActivity() {
+/**
+ * Connect — picks the car interface from the head unit's paired Bluetooth
+ * devices, or goes straight to the dashboard when one is saved.
+ *
+ * Extends WattsonActivity for the full-screen mode only; there's no side rail
+ * here, because nothing else works until a device is chosen.
+ */
+class MainActivity : WattsonActivity() {
 
     companion object {
         const val PREF_LAST_DEVICE = "last_device_address"
+        /**
+         * The last device the dashboard actually connected to. Unlike
+         * PREF_LAST_DEVICE it survives "Change Bluetooth device", so the
+         * picker can still put that device first and mark it "last used".
+         */
+        const val PREF_LAST_USED   = "last_used_device_address"
         /** Set by BootReceiver on the intent it launches us with. */
         const val EXTRA_FROM_BOOT  = "from_boot"
+
+        /** Names the ESP32 car interface is known to advertise. */
+        private val CAR_NAMES = listOf("freelander", "wattson", "landrover", "land rover")
+
+        fun looksLikeCar(name: String?): Boolean =
+            name != null && CAR_NAMES.any { name.contains(it, ignoreCase = true) }
     }
 
     private lateinit var btAdapter: BluetoothAdapter
     private lateinit var listView:   ListView
     private lateinit var statusText: TextView
+    private lateinit var statusDot:  View
     private val deviceList = mutableListOf<BluetoothDevice>()
+    // Lazy: the adapter needs a LayoutInflater, which isn't available until
+    // the activity is created.
+    private val deviceAdapter by lazy { DeviceAdapter() }
+
+    /** Status line under the title; [problem] turns the dot amber. */
+    private fun status(text: String, problem: Boolean = false) {
+        statusText.text = text
+        statusDot.setBackgroundResource(if (problem) R.drawable.dot_halo_warn else R.drawable.dot_halo)
+    }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
         if (results.values.all { it }) tryAutoConnectOrShowPicker()
-        else statusText.text = "Bluetooth permission denied — please grant in phone Settings"
+        else status("Bluetooth permission denied — allow it for Wattson in Android Settings", problem = true)
     }
 
     private val enableBtLauncher = registerForActivityResult(
@@ -69,10 +102,13 @@ class MainActivity : AppCompatActivity() {
 
         listView   = findViewById(R.id.deviceList)
         statusText = findViewById(R.id.statusText)
+        statusDot  = findViewById(R.id.statusDot)
+        listView.adapter = deviceAdapter
+        findViewById<View>(R.id.btnBluetoothSettings).setOnClickListener { openBluetoothSettings() }
 
         val adapter = getSystemService(BluetoothManager::class.java)?.adapter
         if (adapter == null) {
-            statusText.text = "This device has no Bluetooth — cannot connect to the car"
+            status("This device has no Bluetooth, so it can't connect to the car", problem = true)
             return
         }
         btAdapter = adapter
@@ -98,7 +134,7 @@ class MainActivity : AppCompatActivity() {
                 Manifest.permission.BLUETOOTH_CONNECT
             ).filter { ActivityCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
             if (missing.isNotEmpty()) {
-                statusText.text = "Requesting Bluetooth permission…"
+                status("Asking for Bluetooth permission…")
                 permissionLauncher.launch(missing.toTypedArray())
                 return
             }
@@ -122,7 +158,7 @@ class MainActivity : AppCompatActivity() {
                 if (switching) {
                     waitForBluetoothOn()
                 } else {
-                    statusText.text = "Turning Bluetooth on…"
+                    status("Turning Bluetooth on…")
                     enableBtLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
                 }
             }
@@ -153,8 +189,8 @@ class MainActivity : AppCompatActivity() {
             stopWaitingForBluetooth()
             tryAutoConnectOrShowPicker()
         } else {
-            statusText.text = "Still waiting for Bluetooth… it will connect as soon as " +
-                "Bluetooth is on (Settings → Bluetooth if it stays off)"
+            status("Still waiting for Bluetooth. It connects as soon as Bluetooth is on " +
+                "(Open Bluetooth settings if it stays off).", problem = true)
         }
     }
 
@@ -164,7 +200,7 @@ class MainActivity : AppCompatActivity() {
             waitingForBt = true
             registerReceiver(btStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
         }
-        statusText.text = "Waiting for Bluetooth…"
+        status("Waiting for Bluetooth…")
         btWait.removeCallbacks(btWaitTimeout)
         btWait.postDelayed(btWaitTimeout, 12_000)
     }
@@ -192,7 +228,7 @@ class MainActivity : AppCompatActivity() {
         if (savedAddress != null && BluetoothAdapter.checkBluetoothAddress(savedAddress)) {
             val device = runCatching { btAdapter.getRemoteDevice(savedAddress) }.getOrNull()
             if (device != null) {
-                statusText.text = "Auto-connecting…"
+                status("Connecting…")
                 launchDashboard(device)
                 return
             }
@@ -209,24 +245,28 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadPairedDevices() {
         deviceList.clear()
-        deviceList.addAll(btAdapter.bondedDevices)
-        listView.adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_list_item_1,
-            deviceList.map { it.name ?: it.address }
-        )
+        // The car interface first (the one last used before anything else),
+        // then everything else by name.
+        val lastUsed = lastUsedAddress()
+        deviceList.addAll(btAdapter.bondedDevices.sortedWith(
+            compareByDescending<BluetoothDevice> { it.address == lastUsed }
+                .thenByDescending { looksLikeCar(safeName(it)) }
+                .thenBy { (safeName(it) ?: it.address).lowercase() }))
+        deviceAdapter.notifyDataSetChanged()
         if (deviceList.isNotEmpty()) {
             pairedTries = 0
-            statusText.text = "Tap 'Freelander EV' to connect"
+            val car = deviceList.firstOrNull { isCar(it) }
+            status(if (car != null) "Tap ${safeName(car) ?: "the car interface"} to connect"
+                   else "Tap the car interface to connect")
             return
         }
         if (pairedTries < 10) {                    // ~10 s of grace
             pairedTries++
-            statusText.text = "Looking for paired devices…"
+            status("Looking for paired devices…")
             pairedRetry.postDelayed({ loadPairedDevices() }, 1_000)
         } else {
-            statusText.text =
-                "No paired devices — pair 'Freelander EV' in Bluetooth settings first"
+            status("No paired devices. Pair Freelander EV in Bluetooth settings first.",
+                problem = true)
         }
     }
 
@@ -248,7 +288,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun connectTo(device: BluetoothDevice) {
-        statusText.text = "Connecting to ${device.name}…"
+        status("Connecting to ${safeName(device) ?: device.address}…")
         launchDashboard(device)
     }
 
@@ -257,5 +297,69 @@ class MainActivity : AppCompatActivity() {
         intent.putExtra("device_address", device.address)
         startActivity(intent)
         finish() // close picker — DashboardActivity handles all retries itself
+    }
+
+    private fun lastUsedAddress(): String? =
+        getSharedPreferences("prefs", MODE_PRIVATE).getString(PREF_LAST_USED, null)
+
+    /** The car interface: the device last used, or one named like it. */
+    private fun isCar(d: BluetoothDevice): Boolean =
+        d.address == lastUsedAddress() || looksLikeCar(safeName(d))
+
+    /** BluetoothDevice.name can throw without permission; never crash the list on it. */
+    private fun safeName(d: BluetoothDevice): String? =
+        runCatching { d.name }.getOrNull()?.takeIf { it.isNotBlank() }
+
+    private fun openBluetoothSettings() {
+        try {
+            startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+        } catch (_: android.content.ActivityNotFoundException) {
+            try {
+                startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
+            } catch (_: android.content.ActivityNotFoundException) {
+                Toast.makeText(this, "This unit has no Bluetooth settings screen", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /** Paired devices, car interface first and accented. */
+    private inner class DeviceAdapter : BaseAdapter() {
+        private val inflater: LayoutInflater by lazy { LayoutInflater.from(this@MainActivity) }
+        private val density by lazy { resources.displayMetrics.density }
+
+        override fun getCount() = deviceList.size
+        override fun getItem(position: Int) = deviceList[position]
+        override fun getItemId(position: Int) = position.toLong()
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val v = convertView ?: inflater.inflate(R.layout.item_device, parent, false)
+            val d = deviceList[position]
+            val car = isCar(d)
+            val name = safeName(d) ?: "Unnamed device"
+            val lastUsed = d.address == lastUsedAddress()
+
+            v.layoutParams = v.layoutParams.apply { height = ((if (car) 96 else 80) * density).toInt() }
+            v.setBackgroundResource(if (car) R.drawable.bg_device_row_car else R.drawable.bg_device_row)
+
+            val box = v.findViewById<View>(R.id.deviceIconBox)
+            val boxSize = ((if (car) 56 else 48) * density).toInt()
+            box.layoutParams = box.layoutParams.apply { width = boxSize; height = boxSize }
+            box.setBackgroundResource(if (car) R.drawable.bg_icon_box else R.drawable.bg_icon_box_muted)
+            v.findViewById<ImageView>(R.id.deviceIcon).imageTintList =
+                android.content.res.ColorStateList.valueOf(color(if (car) R.color.accent else R.color.text3))
+            v.findViewById<ImageView>(R.id.deviceChevron).imageTintList =
+                android.content.res.ColorStateList.valueOf(color(if (car) R.color.accent else R.color.text3))
+
+            v.findViewById<TextView>(R.id.deviceName).apply {
+                text = name
+                textSize = if (car) 21f else 19f
+                setTextColor(if (car) color(R.color.text) else 0xFFD5DCD9.toInt())
+            }
+            v.findViewById<View>(R.id.deviceTag).visibility = if (car) View.VISIBLE else View.GONE
+            v.findViewById<TextView>(R.id.deviceAddress).text =
+                if (lastUsed) "${d.address} · last used" else d.address
+            v.contentDescription = if (car) "$name, car interface. Tap to connect" else "$name. Tap to connect"
+            return v
+        }
     }
 }
