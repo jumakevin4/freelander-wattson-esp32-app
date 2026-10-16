@@ -15,6 +15,15 @@
  *          Android app     : telemetry over Bluetooth Classic SPP
  *  LOGS    SD card         : every sample as CSV, plus a fault history
  *
+ * v7.5 changes
+ * ------------
+ *  - CURRENT CALIBRATION: IDC_SCALE 1.85 → 1.25, from a full-to-full check.
+ *    The app showed 12.9 kWh for the day's driving and recharging to full
+ *    took 10.0 kWh at the EVSE. Less ~13 % for charger and battery losses the
+ *    pack delivered about 8.7 kWh: 1.85 × 8.7 / 12.9 ≈ 1.25. The 1.85 came
+ *    from the battery % on a short drive straight off the charger, where the
+ *    voltage-based % falls fastest as the pack settles, so it read too high.
+ *
  * v7.4 changes
  * ------------
  *  - CURRENT CALIBRATION: IDC_SCALE 1.0 → 1.85. On a test drive the battery
@@ -182,7 +191,7 @@
  *   SD    : WeAct TF slot — CS 13, SCK 14, MOSI 15, MISO 2 (FAT32/FAT16, MBR)
  */
 
-#define FW_VERSION "v7.4"
+#define FW_VERSION "v7.5"
 
 #include <Arduino.h>
 #include "driver/twai.h"
@@ -469,14 +478,17 @@ float getBattVolt()   { return paramFresh(params[IDX_UDC])   ? params[IDX_UDC].v
 // always discharge; magnitude handles the swapped sign convention.
 // IDC_SCALE calibrates openinverter's idc estimate against reality.
 // History: 3.0 → 0.8 (three-trip SOC calibration, il1gain/il2gain = 1.5)
-// → 1.3 → 1.0 (2026-07-11 road feedback) → 1.85 (2026-10-14, test drive:
-// battery 100 → 74 % ≈ 2.99 kWh while the app integrated 1.58 kWh at 1.0,
-// ratio 1.89; 1.85 is the middle of the 1.8–1.9 estimate).
+// → 1.3 → 1.0 (2026-07-11 road feedback) → 1.85 (2026-10-14, from the battery
+// % on a short drive straight off the charger: too high) → 1.25 (2026-10-16,
+// full-to-full charge-back: the app showed 12.9 kWh at 1.85 and the EVSE put
+// 10.0 kWh back, ≈ 8.7 kWh out of the pack after ~13 % charging losses).
 // idc is the inverter's own estimate and leaves out the DC-DC, so this one
 // factor also absorbs the 12 V load.
-// ⚠ Recalibrate if il1gain/il2gain ever change:
-//   new IDC_SCALE = current IDC_SCALE × (ΔSOC × pack Wh) / (app session Wh)
-#define IDC_SCALE  1.85f
+// ⚠ Recalibrate if il1gain/il2gain ever change, by charge-back rather than
+// battery % (which overstates use near full): start full, drive, recharge to
+// full, read the EVSE's kWh, then
+//   new IDC_SCALE = current IDC_SCALE × (EVSE kWh × 0.87) / (app kWh)
+#define IDC_SCALE  1.25f
 float getBattCurr()   { return paramFresh(params[IDX_CURR])  ? fabsf(params[IDX_CURR].value) * IDC_SCALE : 0.0f; }
 float getBattTempC()  { return paramFresh(params[IDX_TMPHS]) ? params[IDX_TMPHS].value : 0.0f; }  // heatsink
 float getMotorTempC() { return paramFresh(params[IDX_TMPM])  ? params[IDX_TMPM].value  : 0.0f; }
@@ -560,7 +572,7 @@ char getGear() {
 // Calibrated 2026-07-11 at IDC_SCALE 1.0: hard-pull peak ≈ 128 A × 35 ≈ 4500 rpm
 // — full throttle lands at the top of the dial, cruise reads 1000–2000.
 // Divided by IDC_SCALE so recalibrating the current doesn't move the needle
-// (at 1.85 the same pull reads ≈ 237 A × 18.9 rpm/A).
+// (at 1.25 the same pull reads ≈ 160 A × 28 rpm/A).
 #define RPM_PER_AMP  (35.0f / IDC_SCALE)
 #define RPM_MAX      6000.0f
 static twai_message_t tx316;
