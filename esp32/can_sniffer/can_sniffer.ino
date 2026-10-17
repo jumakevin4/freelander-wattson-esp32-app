@@ -15,6 +15,16 @@
  *          Android app     : telemetry over Bluetooth Classic SPP
  *  LOGS    SD card         : every sample as CSV, plus a fault history
  *
+ * v7.6 changes
+ * ------------
+ *  - SD CARD: the pull-up the card's data-out line (MISO, GPIO2) needs was set
+ *    before the SPI setup, which resets that pin to a plain input, so the line
+ *    floated and the card's replies read as zeros: "not detected" even with a
+ *    good card fitted. The pull-up now goes on after the SPI setup.
+ *  - SD CARD: when it still won't mount, Diagnostics says why: no card
+ *    answering, a card without FAT32 on an MBR partition, a log file that
+ *    can't be created, or a write that failed mid-drive.
+ *
  * v7.5 changes
  * ------------
  *  - CURRENT CALIBRATION: IDC_SCALE 1.85 → 1.25, from a full-to-full check.
@@ -191,7 +201,7 @@
  *   SD    : WeAct TF slot — CS 13, SCK 14, MOSI 15, MISO 2 (FAT32/FAT16, MBR)
  */
 
-#define FW_VERSION "v7.5"
+#define FW_VERSION "v7.6"
 
 #include <Arduino.h>
 #include "driver/twai.h"
@@ -202,6 +212,8 @@
 #include <math.h>
 #include <SPI.h>
 #include <SD.h>
+#include "sd_diskio.h"     // card type after a failed mount (sdProbe)
+#include "driver/gpio.h"   // gpio_pullup_en for the SD card's MISO line
 #include <Preferences.h>
 #include <Update.h>          // firmware update over Bluetooth (OTA)
 #include "esp_ota_ops.h"     // partition/rollback state
@@ -708,6 +720,16 @@ static const char* SD_HEADER =
 
 static SPIClass sdSpi(HSPI);
 static bool     sdOk        = false;
+// Why the card is or isn't logging, for the app's Diagnostics ("sdst"):
+//   ok        mounted and logging
+//   noanswer  no card answered: none fitted, not pushed home, or the wiring
+//   notfat    a card answered but has no FAT16/FAT32 on an MBR partition
+//             (exFAT, a Mac's default GUID partition map, or unformatted)
+//   flaky     the card answered the check but not the mount just before it
+//   nowrite   mounted, but the log file can't be created (full or damaged)
+//   lost      was logging, then a write failed (card pulled out or failing)
+static const char* sdStatus = "noanswer";
+static uint32_t    sdCardMb = 0;          // card size once mounted
 static uint16_t sdFileNum   = 0;      // file being written this session
 static char     sdPath[20]  = "";
 // Fixed buffer, not a String: this appends every 500 ms for hours, and repeated
@@ -751,12 +773,30 @@ static void sdSaveCursor() {
   sdPrefs.putULong("syncofs",  syncOfs);
 }
 
+// After a failed mount: did a card answer at all? SD.begin() lets go of the
+// card before its type can be read, so mount by hand to tell "no card
+// answering" from "a card, but no FAT16/FAT32 on it".
+static const char* sdProbe() {
+  uint8_t pdrv = sdcard_init(SD_CS, &sdSpi, 400000);
+  if (pdrv == 0xFF) return "noanswer";
+  bool fat = sdcard_mount(pdrv, "/sdprobe", 1, false);
+  sdcard_type_t t = sdcard_type(pdrv);
+  sdcard_unmount(pdrv);
+  sdcard_uninit(pdrv);
+  if (t == CARD_NONE || t == CARD_UNKNOWN) return "noanswer";
+  return fat ? "flaky" : "notfat";      // flaky: mounted now, failed just before
+}
+
 void sdInit() {
-  // GPIO2 is MISO on this board and has no external pull-up, while the ESP32
-  // boots it with an internal pull-DOWN. An SD card needs MISO idling high or
-  // it never answers, so assert the pull-up before probing the bus.
-  pinMode(SD_MISO, INPUT_PULLUP);
   sdSpi.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+  // GPIO2 is MISO on this board and has no external pull-up, and an SD card
+  // needs MISO idling high: left floating, the card's replies read as zeros
+  // and the mount fails with a good card fitted. The pull-up has to go on
+  // AFTER sdSpi.begin(), which resets the pin to a plain input (before v7.6 it
+  // was set first and silently undone), and through the IDF: Arduino's
+  // pinMode() on a pin the SPI bus owns would detach it from the bus.
+  gpio_pulldown_dis((gpio_num_t)SD_MISO);
+  gpio_pullup_en((gpio_num_t)SD_MISO);
 
   // Walk down the clock. A cheap card, a microSD adapter, or long traces can
   // all fail at the 4 MHz default yet work perfectly at 1 MHz — and a slow
@@ -775,10 +815,13 @@ void sdInit() {
   }
 
   if (!mounted) {
-    // Mount failure covers several different problems, so name them all — a
-    // card that is present but exFAT looks identical to no card at all here.
-    // This library cannot format, only mount an existing FAT filesystem.
-    Serial.println("[SD] mount FAILED at every clock rate. Check, in order:");
+    // Mount failure covers several different problems. sdProbe() tells the
+    // main two apart for the app's Diagnostics; the console lists them all.
+    sdStatus = sdProbe();
+    Serial.printf("[SD] mount FAILED at every clock rate (%s). Check, in order:\n",
+      strcmp(sdStatus, "notfat") == 0 ? "a card answered, but has no FAT32/FAT16"
+      : strcmp(sdStatus, "flaky") == 0 ? "the card answers only some of the time"
+      : "no card answered");
     Serial.println("     1. card actually seated (push until it clicks)");
     Serial.println("     2. formatted FAT32/FAT16 with an MBR partition —");
     Serial.println("        exFAT, the default above 32 GB, will NOT mount");
@@ -809,6 +852,7 @@ void sdInit() {
   File f = SD.open(sdPath, FILE_WRITE);
   if (!f) {
     Serial.printf("[SD] cannot create %s — using the RAM ring buffer\n", sdPath);
+    sdStatus = "nowrite";
     return;
   }
   f.print(SD_HEADER);
@@ -816,7 +860,9 @@ void sdInit() {
   sdFileBytes = strlen(SD_HEADER);
 
   sdOk = true;
+  sdStatus = "ok";
   uint64_t mb = SD.cardSize() / (1024ULL * 1024ULL);
+  sdCardMb = (uint32_t)mb;
   Serial.printf("[SD] card %llu MB   logging to %s   app is caught up to LOG%04u @ %lu\n",
                 mb, sdPath, syncFile, (unsigned long)syncOfs);
 }
@@ -849,6 +895,7 @@ static void sdServiceEx(bool force, bool mayAdvance) {
     // buffer rather than silently discarding everything from here on.
     Serial.println("[SD] append failed — card removed? falling back to RAM buffer");
     sdOk = false;
+    sdStatus = "lost";
     sdPendLen = 0;
     return;
   }
@@ -2000,7 +2047,7 @@ static void sendDiag() {
             "\"boots\":%lu,\"firsttx\":%lu,\"canup\":%lu,\"bus\":\"%s\","
             "\"tec\":%lu,\"rec\":%lu,\"busoff\":%lu,\"txfail\":%lu,\"rxmiss\":%lu,"
             "\"buserr\":%lu,\"dup316\":%lu,\"dup329\":%lu,\"dup43f\":%lu,"
-            "\"fuel\":\"%s\",\"fueldrv\":%d,\"sd\":%s,\"heap\":%lu}\n",
+            "\"fuel\":\"%s\",\"fueldrv\":%d,\"sd\":%s,\"sdst\":\"%s\",\"sdmb\":%lu,\"heap\":%lu}\n",
     (unsigned long)(millis() / 1000), resetReasonName(esp_reset_reason()),
     (unsigned long)g_bootCount, (unsigned long)g_firstTxMs, (unsigned long)g_canUpMs, bus,
     (unsigned long)(st ? s.tx_error_counter : 0), (unsigned long)(st ? s.rx_error_counter : 0),
@@ -2008,7 +2055,7 @@ static void sendDiag() {
     (unsigned long)(st ? s.tx_failed_count : 0), (unsigned long)(st ? s.rx_missed_count : 0),
     (unsigned long)(st ? s.bus_error_count : 0),
     (unsigned long)g_dup316, (unsigned long)g_dup329, (unsigned long)g_dup43F,
-    g_fuelSrc, (int)fuelDriveApplied, sdOk ? "true" : "false",
+    g_fuelSrc, (int)fuelDriveApplied, sdOk ? "true" : "false", sdStatus, (unsigned long)sdCardMb,
     (unsigned long)(ESP.getFreeHeap() / 1024));
 }
 

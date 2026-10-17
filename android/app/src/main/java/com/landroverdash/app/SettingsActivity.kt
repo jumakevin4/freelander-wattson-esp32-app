@@ -1075,9 +1075,19 @@ class SettingsActivity : WattsonActivity() {
             else      -> j.optString("fuel", "unknown")
         })
 
+        // From v7.6 the car says why the card isn't logging; before, only yes/no.
         val sd = j.optBoolean("sd")
-        lines += DiagLine("SD log", (if (sd) "OK" else "not detected") +
-                 " · free memory ${j.optLong("heap")} KB", problem = !sd)
+        val sdGb = j.optLong("sdmb") * 1_048_576.0 / 1e9
+        val sdText = when (j.optString("sdst")) {
+            "ok"       -> "OK" + if (sdGb >= 0.5) String.format(Locale.US, " · %.0f GB card", sdGb) else ""
+            "noanswer" -> "no card answering — push it in until it clicks; if it is in, try another card"
+            "notfat"   -> "card found but can't be read — format it FAT32 with a Master Boot Record"
+            "nowrite"  -> "card read, but the log file can't be created — card full or damaged"
+            "lost"     -> "stopped after a failed write — card loose or failing; restart the car to retry"
+            "flaky"    -> "card answers only some of the time — reseat it or try another card"
+            else       -> if (sd) "OK" else "not detected"
+        }
+        lines += DiagLine("SD log", "$sdText · free memory ${j.optLong("heap")} KB", problem = !sd)
         return lines
     }
 
