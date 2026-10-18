@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.combine
 /**
  * Below this the DC-DC isn't charging and the car is running off the 12 V
  * battery alone, which strands it however full the pack is.
- * Must match AUX_WARN_VOLTS in can_sniffer.ino.
+ * Must match AUX_WARN_VOLTS in freelander-esp32.ino.
  */
 internal const val AUX_WARN_VOLTS = 12.0f
 /** Recovery threshold. Above this the low-rail latch re-arms. */

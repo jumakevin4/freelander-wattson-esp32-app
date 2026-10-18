@@ -689,7 +689,7 @@ class DashboardViewModel(app: Application) : AndroidViewModel(app) {
     // Note the plateau: 300 V to 310 V is 22 points of SOC, while the same
     // 10 V swing near the ends is worth about half that.
     //
-    // Must stay consistent with can_sniffer.ino, which drives the physical
+    // Must stay consistent with freelander-esp32.ino, which drives the physical
     // fuel gauge from the same table.
     private val SOC_V = floatArrayOf(
         270f, 275f, 280f, 285f, 290f, 295f, 300f, 305f,

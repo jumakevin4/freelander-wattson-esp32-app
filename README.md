@@ -10,7 +10,7 @@ a Tesla small drive unit running OpenInverter. Two halves talk over Bluetooth:
   temperature and fuel gauges and the gear display, logs to a microSD card,
   streams live data to the app and takes firmware updates from it.
 
-> Keep this repository private. `esp32/can_sniffer/can_sniffer.ino` holds the
+> Keep this repository private. `esp32/freelander-esp32/freelander-esp32.ino` holds the
 > car interface's Bluetooth PIN (`BT_PIN`), and anyone with it can pair.
 
 ## What's where
@@ -18,7 +18,7 @@ a Tesla small drive unit running OpenInverter. Two halves talk over Bluetooth:
 | Folder | Contents |
 |---|---|
 | `android/` | The app's Android Studio project (Kotlin, XML views, package `com.landroverdash.app`). |
-| `esp32/can_sniffer/` | Car interface firmware. The change history for each version is at the top of the sketch. |
+| `esp32/freelander-esp32/` | Car interface firmware. The change history for each version is at the top of the sketch. |
 | `esp32/fuel_gauge_calibrate/` | Bench sketch for calibrating the fuel needle's vactrol. |
 | `esp32/releases/` | Ready-to-install firmware builds (`.ino.bin`). |
 | `esp32/README.md` | Original notes on the Bluetooth protocol between the app and the interface. Its hardware section predates the WeAct board. |
@@ -39,7 +39,7 @@ Arduino Runs On and Events Run On both Core 1. Only core libraries are used.
 The same build from the command line:
 
 ```sh
-arduino-cli compile --fqbn "esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default" esp32/can_sniffer
+arduino-cli compile --fqbn "esp32:esp32:esp32:UploadSpeed=921600,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=disabled,LoopCore=1,EventsCore=1,EraseFlash=none,JTAGAdapter=default,ZigbeeMode=default" esp32/freelander-esp32
 ```
 
 To install, use **Sketch → Export Compiled Binary** in Arduino IDE (or a file

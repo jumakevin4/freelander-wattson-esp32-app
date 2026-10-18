@@ -1,4 +1,4 @@
-# Freelander EV — CAN Sniffer + LandroverEV Dashboard
+# Freelander EV — freelander-esp32 + LandroverEV Dashboard
 
 ESP32 firmware that decodes the Land Rover Freelander CAN bus, keeps the
 coolant gauge alive, and streams telemetry over Bluetooth Classic (SPP) to
@@ -6,7 +6,7 @@ the **LandroverEV** Android app.
 
 | Component | Location |
 |-----------|----------|
-| ESP32 firmware | `esp32_firmware/can_sniffer/can_sniffer.ino` (this folder) |
+| ESP32 firmware | `freelander-esp32/freelander-esp32.ino` (this folder) |
 | Android app | `~/AndroidStudioProjects/LandroverEV` (separate Android Studio project, v4.0) |
 | UI mockup | `dashboard_mockup.html` |
 
@@ -91,7 +91,7 @@ can't stall CAN reception), classic-BT PIN `2837` (legacy pairing only).
 ## Setup
 
 **ESP32 (Arduino IDE):** install the ESP32 board package (core 2.0.5+ or 3.x),
-open `esp32_firmware/can_sniffer/can_sniffer.ino`, board *ESP32 Dev Module*,
+open `freelander-esp32/freelander-esp32.ino`, board *ESP32 Dev Module*,
 flash at 115200 baud.
 
 **Android:** open `~/AndroidStudioProjects/LandroverEV` in Android Studio and

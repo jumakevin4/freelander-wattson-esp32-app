@@ -18,7 +18,7 @@
  *   Measurement showed the gauge's whole upper half sits below 8 % drive.
  *   At the Arduino default of 8 bits that is duty 0..20 of 255 — roughly
  *   4 counts per eighth of a tank, far too coarse to place a needle. This
- *   sketch and can_sniffer.ino both use 12-bit (0..4095), giving ~41
+ *   sketch and freelander-esp32.ino both use 12-bit (0..4095), giving ~41
  *   counts per 1 % drive. Drive % is the interchange unit between them,
  *   so calibration transfers unchanged.
  *
@@ -43,7 +43,7 @@
  *   R           re-apply current level
  *   S <d>       drive an arbitrary level, d = 0..100 %, sequence unchanged
  *   T           table collected so far
- *   C           generate the can_sniffer.ino calibration arrays
+ *   C           generate the freelander-esp32.ino calibration arrays
  *   Z           erase all recordings
  *   ?           help
  * ------------------------------------------------------------------
@@ -54,7 +54,7 @@
 #include <math.h>
 
 // ---- hardware ----------------------------------------------------
-#define FUEL_PWM_PIN   GPIO_NUM_25    // must match can_sniffer.ino
+#define FUEL_PWM_PIN   GPIO_NUM_25    // must match freelander-esp32.ino
 #define FUEL_PWM_BITS  12
 #define FUEL_PWM_MAX   4095.0f
 
@@ -177,9 +177,9 @@ void printTable() {
 }
 
 // ------------------------------------------------------------------
-// generate the can_sniffer.ino arrays
+// generate the freelander-esp32.ino arrays
 // ------------------------------------------------------------------
-// can_sniffer.ino interpolates drive % over ASCENDING SOC. We want the
+// freelander-esp32.ino interpolates drive % over ASCENDING SOC. We want the
 // needle to read proportionally to SOC, so a needle at e/8 is exactly
 // what SOC = e/8 * 100 should look like. That inverts each recorded
 // (drive, needle) pair into the (soc, drive) pair the firmware needs.
@@ -232,7 +232,7 @@ void printArrays() {
   for (int i = 1; i < m; i++) if (drv[i] > drv[i-1] + 0.01f) mono = false;
 
   Serial.println();
-  Serial.println("  ---- paste into can_sniffer.ino, replacing the ----");
+  Serial.println("  ---- paste into freelander-esp32.ino, replacing the ----");
   Serial.println("  ---- FUEL_SOC_PTS / FUEL_DRIVE_PTS / FUEL_NPTS ----");
   Serial.println();
   Serial.print("static const float FUEL_SOC_PTS[]   = { ");

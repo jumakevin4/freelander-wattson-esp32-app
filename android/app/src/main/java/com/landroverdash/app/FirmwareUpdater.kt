@@ -74,7 +74,7 @@ sealed class OtaState {
  * Pushes a new ESP32 firmware image over the existing SPP link.
  *
  * Process-scoped on purpose: leaving Settings mid-transfer must not kill it.
- * The protocol is stop-and-wait (see the OTA section of can_sniffer.ino): send
+ * The protocol is stop-and-wait (see the OTA section of freelander-esp32.ino): send
  * one chunk, wait for its ack, repeat. Nothing becomes bootable on the ESP32
  * until the whole image has arrived and its MD5 matches, so every failure path
  * here leaves the car on the firmware it already had.
@@ -149,7 +149,7 @@ object FirmwareUpdater {
         // two-minute transfer and explains why.
         val ver = carFirmwareVersion(bytes)
             ?: return "This isn't the car's firmware — it doesn't contain the " +
-                "\"Freelander EV Vehicle Interface\" banner. Export can_sniffer " +
+                "\"Freelander EV Vehicle Interface\" banner. Export freelander-esp32 " +
                 "with Sketch → Export Compiled Binary and pick its .ino.bin."
         if (ver.first < 7 || (ver.first == 7 && ver.second < 1))
             return "That file is firmware v${ver.first}.${ver.second}, which can't be " +

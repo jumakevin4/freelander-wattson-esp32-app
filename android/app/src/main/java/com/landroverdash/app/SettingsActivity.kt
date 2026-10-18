@@ -59,7 +59,7 @@ class SettingsActivity : WattsonActivity() {
         const val PREF_VOLT_EMPTY      = "voltage_at_0"
         const val PREF_AUTOSTART       = "autostart_on_boot"
 
-        // The firmware's own SOC table (can_sniffer.ino PACK_V_FULL/EMPTY). Used
+        // The firmware's own SOC table (freelander-esp32.ino PACK_V_FULL/EMPTY). Used
         // whenever no custom voltages are saved: the inverter conversion sends
         // soc = 0 and the old fuel-gauge SOC source no longer exists, so without
         // a default the battery % and range simply read "--" forever.

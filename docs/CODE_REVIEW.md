@@ -15,7 +15,7 @@ bugs that I'd fix before trusting any number the app shows.
 ### 1. Energy integration assumes 1 Hz, but the ESP32 sends at 2 Hz
 `EnergyManager.onSecondSample()` computes `wh = V * I / 3600` for every packet and
 accumulates it, i.e. it treats **each packet as exactly one second of energy**. But
-the firmware sends real-time JSON every 500 ms (`#define BT_MS 500` in `can_sniffer.ino`),
+the firmware sends real-time JSON every 500 ms (`#define BT_MS 500` in `freelander-esp32.ino`),
 so there are ~2 packets per second. Every energy figure in the app is therefore roughly
 **2× too high**: `sessionWh`, consumed kWh, efficiency (Wh/km), the energy bar chart,
 projected range, and every persisted `EnergyTenMin`/`EnergyHourly`/`TripSession` row.
